@@ -1,0 +1,75 @@
+{
+  "churchname": "Agun Sinsɛn Wéwé Klist tɔn sɔn olɔn mɛn wa",
+  "cstTag": "Commité Supérieur de Transition (CST)",
+  "welcomeText": "Mɛ bɔ CST wɔ́lɛ yá",
+  "benefit1": "Lɛ́ ló yé nyɔ́ wɛ́ gbè hɔ́ lɛ́",
+  "youreJustGettingStarted": "Décisions - Reformes - Discussion",
+  "benefit2": "Mɛ lɛ́ kpo gbɔ̀ wɛ́ nɔ̀ nyɔ̀ hɛn",
+  "benefit3": "Mɛ dó wɛ́ kplɛ́ sɔ̀ gbè àzɔ lɛ́ kɔ̀ nɔ̀",
+  "login": "Zɔ̀",
+  "signup": "Kplɔnù",
+  "guest": "Zɔ̀ sɔ́ hùn",
+  "noAccountSignUp": "Don't have an account? Regiter here.",
+  "selectLanguage": "Yan Èdè",
+  "home": {
+    "explore": "Zɔ nɔn",
+    "searchPlaceholder": "Wá nɔ hɛn",
+    "seeMore": "Wlɛ ɖo xwé",
+    "tabs": {
+      "news": "Hɔntɔ",
+      "announcements": "Wémè",
+      "reforms": "Tɔnkpɔn",
+      "decisions": "ɖɔxɔ",
+      "events": "Sɔsɔwɛ"
+    }
+  },
+  "notifications": {
+    "title": "Agbéjádé",
+    "clearAll": "Sùn gban",
+    "noNotifications": "Kpéɖa agbéjádé wé",
+    "newMessage": "Nú wá àdéhùn",
+    "newMessageDesc": "Wé nú wá àdéhùn wé dé gbè yì wá.",
+    "updateAvailable": "Ìgbé wá gbè dé",
+    "updateAvailableDesc": "Agbá wá gban gbè tɔn wé gbè kpé wá.",
+    "systemAlert": "Àbájá kplɔ",
+    "systemAlertDesc": "Tɔn kéké wé wé yì kplɔ dɔ̀n."
+  },
+  "bottomTabs": {
+    "Home": "Hùn",
+    "LeComite": "Kɔmitɛ",
+    "Documents": "Àgbéjádé",
+    "Messages": "Àdéhùn",
+    "Cantiques": "OHan Wɛ́lɛ̀"
+  },
+  "settings": {
+    "title": "Déhùn",
+    "language": "Sɛ̀",
+    "notifications": "Fúŋkɔn",
+    "darkMode": "Mìdɔ̀bì gùn",
+    "privacyPolicy": "Sɛ́yí nù",
+    "aboutApp": "Gbé dɔ̀ kɔn",
+    "selectLanguage": "Sè Sɛ̀"
+  },
+  "lang": {
+    "en": "Lànglisi",
+    "fr": "Fransè",
+    "yo": "Yorùbá",
+    "gou": "Fɔ̀n",
+    "es": "Espàñòl"
+  },
+  "common": {
+    "close": "Dɔ̀"
+  },
+  "documents": {
+    "title": "Documents"
+  },
+  "doc_10_commandments": "The 10 Commandments of God",
+  "doc_church_history": "The History of the Celestial Church",
+  "doc_osh_offa": "Papa Samuel Bilewu Joseph Oshoffa",
+  "doc_constitution": "The Blue Constitution of the ECC",
+  "doc_light_on_ecc": "Light on ECC",
+  "doc_11_ordnances": "The 11 Ordinances of the ECC",
+  "doc_4_sacraments": "The 4 Sacraments of the ECC",
+  "doc_12_forbidden": "The 12 Forbidden Acts of the ECC",
+  "doc_institutions": "The Institutions of the ECC"
+}

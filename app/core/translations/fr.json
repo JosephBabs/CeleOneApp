@@ -1,0 +1,229 @@
+{
+  "churchname": "Eglise du Christianisme Céleste",
+  "cstTag": "Commité Supérieur de Transition (CST)",
+  "welcomeText": "Bienvenue sur l'application officielle du CST",
+  "youreJustGettingStarted": "Décisions - Reformes - Discussion",
+  "benefit1": "Restez informé des réformes de l'église",
+  "benefit2": "Soumettez des propositions de reformes pour les dignitaires de l'église",
+  "benefit3": "Rejoignez le salon de discussion mondial avec des modérateurs",
+  "login": "Connexion",
+  "signup": "Inscription",
+  "email": "Adresse e-mail",
+  "password": "Mot de passe",
+  "emailPlaceholder": "Entrez votre e-mail",
+  "passwordPlaceholder": "Entrez votre mot de passe",
+  "noAccountSignUp": "Vous n'avez pas de compte ? Inscrivez-vous",
+  "haveAccountLogin": "Vous avez déjà un compte ? Connectez-vous",
+  "firstname": "Prénom",
+  "lastname": "Nom",
+  "parishName": "Nom de la paroisse",
+  "phone": "Numéro de téléphone",
+  "confirmPassword": "Confirmer le mot de passe",
+  "signupTitle": "Créer un compte",
+  "next": "Suivant",
+  "back": "Retour",
+  "selectCountry": "Sélectionnez votre pays",
+  "guest": "Continuer en tant qu'invité",
+  "loginWithGoogle": "Se connecter avec Google",  
+  "forgotPassword": "Mot de passe oublié ?",
+  "resetPassword": "Réinitialiser le mot de passe",
+  "loading": "Chargement...",
+  "updateProfile": "Mettre à jour le profil",
+  "error": {
+    "error": "Erreur",
+    "fillAllFields": "Veuillez remplir tous les champs",
+    "invalidEmail": "Adresse e-mail invalide",
+    "userNotFound": "Utilisateur non trouvé",
+    "wrongPassword": "Mot de passe incorrect",
+    "emailAlreadyInUse": "L'adresse e-mail est déjà utilisée",
+    "weakPassword": "Le mot de passe est trop faible",
+    "tooManyRequests": "Trop de tentatives de connexion. Réessayez plus tard.",
+    "resetFailed": "Échec de l'envoi de l'e-mail de réinitialisation.",
+    "enterEmailReset": "Entrez votre e-mail pour réinitialiser le mot de passe",
+    "loginFailed": "Échec de la connexion",
+    "googleLoginFailed": "Échec de la connexion Google",
+    "resetEmailSent": "E-mail de réinitialisation du mot de passe envoyé !",
+    "profileUpdated": "Profil mis à jour avec succès",
+    "updateFailed": "Échec de la mise à jour du profil",
+    "reauthRequired": "Veuillez vous déconnecter et vous reconnecter avant de modifier l'e-mail",
+
+    "generic": "Une erreur est survenue. Veuillez réessayer."
+  },
+  "onboard": {
+    "skip": "Passer",
+    "next": "Suivant",
+    "start": "Commencer",
+    "title1": "Bienvenue dans l'application Cèlè One",
+    "text1": "Unir les Célestes du monde entier et renforcer la foi avec les lois d'origine et les mises à jour.",
+    "title2": "Préserver notre fondation",
+    "text2": "Cette application soutient la Commission Supérieur de Transition dans la restauration de la vision d’Oshoffa.",
+    "title3": "Restez connecté",
+    "text3": "Recevez les actualités, cantiques, documents de l’église, et rejoignez le chat mondial céleste."
+  },
+  "home": {
+    "explore": "Explorer",
+    "searchPlaceholder": "Rechercher ici",
+    "seeMore": "Voir plus",
+    "tabs": {
+      "news": "Actualités",
+      "announcements": "Annonces",
+      "reforms": "Réformes",
+      "decisions": "Décisions",
+      "events": "Événements"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clearAll": "Tout effacer",
+    "noNotifications": "Aucune notification",
+    "newMessage": "Nouveau message reçu",
+    "newMessageDesc": "Vous avez un nouveau message de l’administrateur.",
+    "updateAvailable": "Mise à jour disponible",
+    "updateAvailableDesc": "Une nouvelle mise à jour de l’application est prête à être installée.",
+    "systemAlert": "Alerte système",
+    "systemAlertDesc": "Une activité inhabituelle a été détectée sur votre compte."
+  },
+  "bottomTabs": {
+    "Home": "Accueil",
+    "LeComite": "Comité",
+    "Documents": "Documents",
+    "Messages": "Forums",
+    "Cantiques": "Cantiques"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "notifications": "Notifications",
+    "darkMode": "Mode sombre",
+    "privacyPolicy": "Politique de confidentialité",
+    "aboutApp": "À propos de l'application",
+    "selectLanguage": "Choisir la langue",
+    "languageChanged": "Langue changée avec succès",
+    "enableNotifications": "Activer les notifications",
+    "disableNotifications": "Désactiver les notifications",
+    "notificationsEnabled": "Notifications activées",
+    "notificationsDisabled": "Notifications désactivées",
+    "enableDarkMode": "Activer le mode sombre",
+    "disableDarkMode": "Désactiver le mode sombre",
+    "darkModeEnabled": "Mode sombre activé",
+    "darkModeDisabled": "Mode sombre désactivé",
+    "appVersion": "Version de l'application",
+    "termsOfService": "Conditions d'utilisation",
+    "logout": "Se déconnecter",
+    "confirmLogout": "Êtes-vous sûr de vouloir vous déconnecter ?",
+    "logoutSuccess": "Déconnexion réussie",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "privacyPolicyText": "Cette politique de confidentialité explique comment nous recueillons, utilisons et protégeons vos informations lorsque vous utilisez notre application. En utilisant l'application, vous acceptez les pratiques décrites dans cette politique.",
+    "aboutAppText": "L'application Cèlè One est conçue pour connecter les membres de l'Église du Christianisme Céleste à travers le monde. Elle offre des fonctionnalités telles que les actualités, les documents de l'église, les forums de discussion et plus encore pour renforcer la foi et l'unité parmi les Célestes.",
+    "monCompte": "Mon Compte",
+    "profile": "Profil",
+    "changePassword": "Changer le mot de passe", 
+    "deleteAccount": "Supprimer le compte",
+    "accountDeleted": "Compte supprimé avec succès",
+    "deleteAccountConfirm": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
+    "changePasswordSuccess": "Mot de passe changé avec succès",
+    "currentPassword": "Mot de passe actuel",
+    "newPassword": "Nouveau mot de passe",  
+    "confirmNewPassword": "Confirmer le nouveau mot de passe",
+    "passwordMismatch": "Le nouveau mot de passe et la confirmation ne correspondent pas",
+    "updatePassword": "Mettre à jour le mot de passe",
+    "updateProfile": "Mettre à jour le profil",
+    "profileUpdated": "Profil mis à jour avec succès",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "phoneNumber": "Numéro de téléphone",
+    "parish": "Paroisse",
+    "emailAddress": "Adresse e-mail",
+    "editProfile": "Modifier le profil",
+    "saveChanges": "Enregistrer les modifications",
+    "changeProfilePicture": "Changer la photo de profil",
+    "selectProfilePicture": "Sélectionner une photo de profil",
+    "removeProfilePicture": "Supprimer la photo de profil",
+    "uploadingPicture": "Téléchargement de la photo...",
+    "pictureUpdated": "Photo de profil mise à jour avec succès",
+    "invalidCurrentPassword": "Mot de passe actuel invalide",
+    "weakNewPassword": "Le nouveau mot de passe est trop faible"
+
+
+
+
+
+  },
+  "lang": {
+    "en": "Anglais",
+    "fr": "Français",
+    "yo": "Yoruba",
+    "gou": "Fon",
+    "es": "Espagnol"
+  },
+  "common": {
+    "close": "Fermer",
+    "cancel": "Annuler",
+    "apply": "Demander",
+    "ok": "OK"
+  },
+  "documents": {
+    "title": "Documents de l'ECC"
+  },
+  "cantiques": {
+    "title": "Cantiques de l'ECC",
+    "en_fr": "Cantique en Français",
+    "en_yo": "Cantique en Yoruba",
+    "en_gou": "Cantique en Goun",
+    "en_fon": "Cantique en Fon",
+    "en_es": "Cantique en Espagnol"
+  },
+  "doc_10_commandments": "10 Commandements",
+  "doc_church_history": "Histoire de l'Église",
+  "doc_osh_offa": "PPF SBJ OSHOFFA",
+  "doc_constitution": "Constitution de l’ECC",
+  "doc_light_on_ecc": "Lumière sur l’ECC",
+  "doc_11_ordnances": "11 Ordonnances",
+  "doc_4_sacraments": "4 Sacrements",
+  "doc_12_forbidden": "12 Actes Interdits",
+  "doc_institutions": "Institutions ECC",
+  "messages": {
+    "title": "Forums ECC",
+    "audiMessage": "Message Vocal",
+    "suggestedRooms": "Salons suggérés pour vous",
+    "apply": "Demander",
+    "requestTitle": "Demande d'adhésion",
+    "requestText": "Souhaitez-vous demander à rejoindre \"{{name}}\" ? Les modérateurs examineront votre profil avant approbation.",
+    "requestSent": "Demande envoyée ✅",
+    "confirmText": "Votre demande pour rejoindre \"{{name}}\" a été envoyée avec succès.",
+    "chatRooms": {
+      "youthForum": "Forum des jeunes du monde",
+      "dignitariesCollege": "Collège des dignitaires à travers le monde",
+      "publicForum": "Forum publique ECC monde",
+      "youthForumBenin": "Forum des jeunes - Bénin",
+      "youthForumNigeria": "Forum des jeunes - Nigeria"
+    },
+    "lastMessages": {
+      "youthWelcome": "Bienvenue au forum des jeunes ✨",
+      "clickToAccess": "Cliquez pour demander l'accès.",
+      "publicMessage": "Dernier message public ECC."
+    }
+  },
+  "tvPlayer": {
+    "liveBadge": "EN DIRECT",
+    "tvTitle": "Cèlè One TV - Diffusion Céleste",
+    "tvSubtitle": "Regardez nos émissions en direct, offices et événements spirituels.",
+    "tabs": {
+      "debates": "Débats",
+      "sermons": "Prêches",
+      "news": "Journaux",
+      "concerts": "Concerts"
+    },
+    "previousVideosTitle": "Vidéos Précédentes",
+    "upcomingEventsTitle": "Événements à venir",
+    "previousVideos": {
+      "sundayService": "Service du Dimanche",
+      "spiritualDebate": "Débat Spirituel"
+    },
+    "events": {
+      "prayerVigil": "Vigile de prière",
+      "pastoralConference": "Conférence Pastorale"
+    }
+  }
+}

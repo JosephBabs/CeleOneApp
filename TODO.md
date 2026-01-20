@@ -1,0 +1,1 @@
+- [x] Modify renderNewsPost in app/source/modules/homescreen/index.tsx to always limit post text to 3 lines and always show "read more" clickable text that navigates to PostDetail page.
