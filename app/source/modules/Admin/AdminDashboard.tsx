@@ -16,6 +16,7 @@ export default function AdminDashboard({ navigation }: any) {
     { id: "3", title: "View Users", icon: "people", navigateTo: "AdminUsers", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
     { id: "4", title: "View Profiles", icon: "person", navigateTo: "AdminProfiles", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
     { id: "5", title: "Pending Requests", icon: "checkmark-circle", navigateTo: "AdminPendingRequests", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
+    { id: "6", title: "Manage Cantiques", icon: "musical-notes", navigateTo: "AdminCantiques", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
   ];
 
   const renderMenuItem = ({ item }: any) => (

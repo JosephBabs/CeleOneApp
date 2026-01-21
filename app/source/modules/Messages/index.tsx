@@ -68,8 +68,16 @@ export default function Messages({ navigation }: any) {
           room.members && room.members.includes(currentUser?.uid)
         );
 
+        // Calculate unread counts for user rooms
+        const userRoomsWithUnread = await Promise.all(
+          userRooms.map(async (room) => {
+            const unreadCount = await getUnreadCount(room.id);
+            return { ...room, unreadCount };
+          })
+        );
+
         setChatRooms(rooms);
-        setUserChatRooms(userRooms);
+        setUserChatRooms(userRoomsWithUnread);
         setLoading(false);
       });
 
@@ -77,6 +85,24 @@ export default function Messages({ navigation }: any) {
     } catch (error) {
       console.error("Error fetching chat rooms:", error);
       setLoading(false);
+    }
+  };
+
+  // Get unread message count for a specific room
+  const getUnreadCount = async (roomId: string): Promise<number> => {
+    try {
+      if (!currentUser?.uid) return 0;
+
+      const messagesQuery = query(
+        collection(db, "chatrooms", roomId, "messages"),
+        where("userId", "!=", currentUser.uid)
+      );
+
+      const messagesSnapshot = await getDocs(messagesQuery);
+      return messagesSnapshot.size;
+    } catch {
+      console.error("Error getting unread count");
+      return 0;
     }
   };
 
@@ -122,7 +148,7 @@ export default function Messages({ navigation }: any) {
           chatAvatar: room.avatar,
         });
       } catch (error) {
-        Alert.alert("Error", "Failed to join room");
+        Alert.alert(t('messagesScreen.error'), t('messagesScreen.failedJoinRoom'));
       }
     } else {
       // Private room, show join request modal
@@ -154,7 +180,7 @@ export default function Messages({ navigation }: any) {
       setPendingRequest(false);
     } catch (error) {
       console.error("Error submitting join request:", error);
-      Alert.alert("Error", "Failed to send join request");
+      Alert.alert(t('messagesScreen.error'), t('messagesScreen.failedSendRequest'));
       setPendingRequest(false);
     }
   };
@@ -168,9 +194,9 @@ export default function Messages({ navigation }: any) {
         : t("messages.private");
 
     // Use app icon as fallback if no avatar
-    const avatarSource = item.avatar && typeof item.avatar === "string" && item.avatar.trim() !== ""
+    const avatarSource = item.avatar && typeof item.avatar === "string" && item.avatar.trim() !== "" && item.avatar.startsWith('http')
       ? { uri: item.avatar }
-      : d_assets.images.appLogo;
+      : d_assets.images.appLogo; 
 
     return (
       <Pressable style={styles.card} onPress={() => handleOpenChat(item)}>
@@ -198,7 +224,7 @@ export default function Messages({ navigation }: any) {
             ]}
             numberOfLines={1}
           >
-            {item.lastMessage || item.description || "No messages yet"}
+            {item.lastMessage || item.description || t("messages.noMessagesYet")}
           </Text>
         </View>
 

@@ -32,6 +32,8 @@ import {
   arrayUnion,
   arrayRemove,
   doc,
+  query,
+  getDocs,
 } from 'firebase/firestore';
 // import AudioPlayer from "./audioplayer";
 
@@ -41,7 +43,11 @@ const Home = ({ navigation }: any) => {
   // const isDark = false; // Replace with actual theme logic
   const [activeTab, setActiveTab] = useState('news');
   const [posts, setPosts] = useState<any[]>([]);
+  const [commentCounts, setCommentCounts] = useState<{ [key: string]: number }>({});
   const [loading, setLoading] = useState(true);
+  const [searchText, setSearchText] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   // const [sound, setSound] = useState<Audio.Sound | null>(null);
   const isAdmin = auth.currentUser?.email === 'bajos3d@gmail.com';
 
@@ -79,16 +85,44 @@ const Home = ({ navigation }: any) => {
     }
   };
 
+  const fetchCommentCounts = async (posts: any[]) => {
+    const counts: { [key: string]: number } = {};
+
+    for (const post of posts) {
+      try {
+        const commentsQuery = query(collection(db, 'posts', post.id, 'comments'));
+        const commentsSnapshot = await getDocs(commentsQuery);
+
+        let total = 0;
+        for (const commentDoc of commentsSnapshot.docs) {
+          total += 1; // the comment itself
+          const repliesQuery = query(
+            collection(db, 'posts', post.id, 'comments', commentDoc.id, 'replies')
+          );
+          const repliesSnapshot = await getDocs(repliesQuery);
+          total += repliesSnapshot.size;
+        }
+        counts[post.id] = total;
+      } catch (error) {
+        console.error('Error fetching comments for post:', post.id, error);
+        counts[post.id] = 0;
+      }
+    }
+
+    setCommentCounts(counts);
+  };
+
   useEffect(() => {
     // Set up real-time listener for posts collection
     const unsubscribe = onSnapshot(
       collection(db, 'posts'),
-      querySnapshot => {
+      async querySnapshot => {
         const postsData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
         }));
         setPosts(postsData);
+        await fetchCommentCounts(postsData);
         setLoading(false);
       },
       error => {
@@ -169,7 +203,7 @@ const Home = ({ navigation }: any) => {
         >
           <Image
             source={post.image || d_assets.images.postImg1}
-            style={styles.singleImage}
+            style={styles.singleImage} 
           />
 
           <View
@@ -272,7 +306,7 @@ const Home = ({ navigation }: any) => {
           onPress={() => navigation.navigate('PostDetail', { post })}
         >
           <Icon name="chatbubble-outline" size={22} color="#444" />
-          <Text style={styles.actionText}>{post.comments}</Text>
+          <Text style={styles.actionText}>{commentCounts[post.id] || 0}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn}>
           <Icon name="share-social-outline" size={22} color="#444" />
@@ -303,57 +337,171 @@ const Home = ({ navigation }: any) => {
   );
 
   // Render reform post
-  const renderReformPost = (post: any) => (
-    <View style={[styles.postCard, { backgroundColor: '#fff7e6' }]}>
-      <Text style={[styles.titleSimple, { marginBottom: 6 }]}>
-        {post.title}
-      </Text>
-      <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
-        {post.summary}
-      </Text>
-      <WebView
-        contentWidth={width}
-        source={{ html: post.fullText }}
-        tagsStyles={{
-          p: { marginVertical: 6, fontSize: 14 },
-          h3: { fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
-          strong: { fontWeight: 'bold' },
-          em: { fontStyle: 'italic' },
-        }}
-      />
-      {/* <Text>{post.fullText}</Text> */}
-      <Text style={{ fontSize: 10, marginTop: 8, color: '#555' }}>
-        {t('home.updatedBy')}: {post.updatedBy} | {t('home.updatedOn')}:{' '}
-        {post.updatedOn}
-      </Text>
-    </View>
-  );
+  const renderReformPost = (post: any) => {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              font-size: 14px;
+              line-height: 1.4;
+              color: #333;
+              margin: 0;
+              padding: 05px;
+            }
+            p {
+              margin: 8px 0;
+              font-size: 14px;
+            }
+            h3 {
+              font-size: 16px;
+              font-weight: bold;
+              margin: 12px 0 6px 0;
+              color: #222;
+            }
+            div {
+              font-weight: bold;
+              color: #444;
+              margin: 6px 0;
+            }
+            em, i {
+              font-style: italic;
+            }
+            strong, b {
+              font-weight: bold;
+            }
+            ul, ol {
+              margin: 8px 0;
+              padding-left: 20px;
+            }
+            li {
+              margin: 4px 0;
+            }
+            blockquote {
+              // border-left: 3px solid #ccc;
+              padding-left: 10px;
+              margin: 10px 0;
+              font-style: italic;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body style="background-color: #fff7e6;">
+          ${post.content}
+        </body>
+      </html>
+    `;
+
+    return (
+      <View style={[styles.postCard, { backgroundColor: '#fff7e6' }]}>
+        <Text style={[styles.titleSimple, { marginBottom: 6 }]}>
+          {post.decisionTitle}
+        </Text>
+        <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
+          {post.decisionTitle}
+        </Text>
+        <WebView
+          originWhitelist={['*']}
+          source={{ html: htmlContent }}
+          style={{ height: 200, width: width - 40 }}
+          scalesPageToFit={false}
+          javaScriptEnabled={false}
+          domStorageEnabled={false}
+        />
+        {/* <Text>{post.fullText}</Text> */}
+        <Text style={{ fontSize: 10, marginTop: 8, color: '#555' }}>
+          {t('home.updatedBy')}: {post.posterName} | {t('home.updatedOn')}:{' '}
+          {post.updatedOn}
+        </Text>
+      </View>
+    );
+  };
 
   // Render decision post
-  const renderDecisionPost = (post: any) => (
-    <View style={[styles.postCard, { backgroundColor: '#e6fff7' }]}>
-      <Text style={[styles.titleSimple, { marginBottom: 6 }]}>
-        {post.decisionTitle}
-      </Text>
-      <Text style={{ color: '#666', fontSize: 12, marginBottom: 6 }}>
-        {post.decisionDate}
-      </Text>
-      <Text style={{ fontWeight: 'bold', marginBottom: 6 }}>
-        {post.decisionSummary}
-      </Text>
-      <WebView
-        contentWidth={width}
-        source={{ html: post.decisionDetails }}
-        tagsStyles={{
-          p: { marginVertical: 6, fontSize: 14 },
-          h3: { fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
-          strong: { fontWeight: 'bold' },
-          em: { fontStyle: 'italic' },
-        }}
-      />
-      {/* <Text>{post.decisionDetails}</Text> */}
-    </View>
-  );
+  const renderDecisionPost = (post: any) => {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              font-size: 14px;
+              line-height: 1.4;
+              color: #333;
+              margin: 0;
+              padding: 04px;
+            }
+            p {
+              margin: 8px 0;
+              font-size: 14px;
+            }
+            h3 {
+              font-size: 16px;
+              font-weight: bold;
+              margin: 12px 0 6px 0;
+              color: #222;
+            }
+            div {
+              font-weight: bold;
+              color: #444;
+              margin: 6px 0;
+            }
+            em, i {
+              font-style: italic;
+            }
+            strong, b {
+              font-weight: bold;
+            }
+            ul, ol {
+              margin: 8px 0;
+              padding-left: 20px;
+            }
+            li {
+              margin: 4px 0;
+            }
+            blockquote {
+              border-left: 3px solid #ccc;
+              padding-left: 10px;
+              margin: 10px 0;
+              font-style: italic;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body style="background-color: #b8e7d8ff;">
+          ${post.content}
+        </body>
+      </html>
+    `;
+
+    return (
+      <View style={[styles.postCard, { backgroundColor: '#b8e7d8ff' }]}>
+        <Text style={[styles.titleSimple, { marginBottom: 6 }]}>
+          {post.decisionTitle}
+        </Text>
+        <Text style={{ color: '#666', fontSize: 12, marginBottom: 6 }}>
+          {post.decisionDate}
+        </Text>
+        <Text style={{ fontWeight: 'bold', marginBottom: 6 }}>
+          {post.decisionSummary}
+        </Text>
+        <WebView
+          originWhitelist={['*']}
+          source={{ html: htmlContent }}
+          style={{ height: 200, width: width - 40 }}
+          scalesPageToFit={false}
+          javaScriptEnabled={false}
+          domStorageEnabled={false}
+        />
+        {/* <Text>{post.decisionDetails}</Text> */}
+      </View>
+    );
+  };
 
   // Render event post
   const renderEventPost = (post: any) => {
@@ -365,17 +513,10 @@ const Home = ({ navigation }: any) => {
         <Text style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
           {post.eventDate} - {post.eventLocation}
         </Text>
-        <Image source={post.bannerImage} style={styles.singleImage} />
-        <WebView
-          contentWidth={width}
-          source={{ html: post.description }}
-          tagsStyles={{
-            p: { marginVertical: 6, fontSize: 14 },
-            h3: { fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
-            strong: { fontWeight: 'bold' },
-            em: { fontStyle: 'italic' },
-          }}
-        />
+        {renderPostMedia(post)}
+        <Text style={{ marginVertical: 10 }} numberOfLines={3}>
+        {post.description}
+      </Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('PostDetail', { post })}
         >
@@ -403,8 +544,82 @@ const Home = ({ navigation }: any) => {
     }
   };
 
-  // Filter posts by selected tab/category
-  const filteredPosts = posts.filter(p => p.category === activeTab);
+  // Get all available categories from posts
+  const availableCategories = [...new Set(posts.map(p => p.category))];
+
+  // Filter posts based on search and tags
+  const getFilteredPosts = () => {
+    let filtered = posts;
+
+    // Apply category filter (tabs)
+    if (activeTab !== 'all') {
+      filtered = filtered.filter(p => p.category === activeTab);
+    }
+
+    // Apply search text filter
+    if (searchText.trim()) {
+      const searchLower = searchText.toLowerCase();
+      filtered = filtered.filter(post => {
+        const searchableText = [
+          post.title,
+          post.content,
+          post.text,
+          post.summary,
+          post.decisionTitle,
+          post.decisionSummary,
+          post.eventName,
+          post.description,
+          post.author,
+          post.updatedBy
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        return searchableText.includes(searchLower);
+      });
+    }
+
+    // Apply tag filters
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(post => selectedTags.includes(post.category));
+    }
+
+    return filtered;
+  };
+
+  const filteredPosts = getFilteredPosts();
+
+  // Handle tag selection
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev =>
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  // Handle search input focus
+  const handleSearchFocus = () => {
+    setIsSearching(true);
+  };
+
+  // Handle search input blur
+  const handleSearchBlur = () => {
+    // Keep tags visible if there are selected tags or search text
+    if (selectedTags.length === 0 && !searchText.trim()) {
+      setIsSearching(false);
+    }
+  };
+
+  // Remove tag from search input
+  const removeTag = (tagToRemove: string) => {
+    setSelectedTags(prev => prev.filter(tag => tag !== tagToRemove));
+  };
+
+  // Clear all search filters
+  const clearSearch = () => {
+    setSearchText('');
+    setSelectedTags([]);
+    setIsSearching(false);
+  };
 
   // Handle like/dislike functionality
   const handleLike = async (post: any) => {
@@ -478,9 +693,65 @@ const Home = ({ navigation }: any) => {
           style={styles.searchInput}
           placeholder={t('home.searchPlaceholder')}
           placeholderTextColor="#888"
+          value={searchText}
+          onChangeText={setSearchText}
+          onFocus={handleSearchFocus}
+          onBlur={handleSearchBlur}
         />
+        {(searchText.length > 0 || selectedTags.length > 0) && (
+          <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+            <Icon name="close" size={20} color="#888" />
+          </TouchableOpacity>
+        )}
       </View>
 
+      {/* Selected Tags as Badges */}
+      {selectedTags.length > 0 && (
+        <View style={styles.selectedTagsContainer}>
+          {selectedTags.map(tag => (
+            <View key={tag} style={styles.tagBadge}>
+              <Text style={styles.tagBadgeText}>{tag}</Text>
+              <TouchableOpacity onPress={() => removeTag(tag)} style={styles.tagBadgeRemove}>
+                <Icon name="close" size={14} color={COLORS.light.primary} />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Category Tags Filter */}
+      {isSearching && (
+        <View style={styles.tagsFilterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tagsScroll}
+          >
+            {availableCategories.map(category => (
+              <TouchableOpacity
+                key={category}
+                onPress={() => toggleTag(category)}
+                style={[
+                  styles.tagButton,
+                  selectedTags.includes(category) && styles.tagButtonSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tagButtonText,
+                    selectedTags.includes(category) && styles.tagButtonTextSelected,
+                  ]}
+                >
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <View style={styles.divider} />
+        </View>
+      )}
+
+      
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <ScrollView

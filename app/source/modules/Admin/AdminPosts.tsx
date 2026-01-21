@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   Image,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { collection, getDocs, addDoc, deleteDoc, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db } from "../auth/firebaseConfig";
 import { COLORS } from "../../../core/theme/colors";
+import { RichEditor, RichToolbar } from "react-native-pell-rich-editor";
 
 export default function AdminPosts({ navigation }: any) {
   const [posts, setPosts] = useState<any[]>([]);
@@ -24,6 +26,8 @@ export default function AdminPosts({ navigation }: any) {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [adminName, setAdminName] = useState("");
   const [editingPost, setEditingPost] = useState<any>(null);
+  const richText = useRef<RichEditor>(null);
+  const [richEditorContent, setRichEditorContent] = useState("");
 
   const [newPost, setNewPost] = useState({
     category: "news",
@@ -75,23 +79,39 @@ export default function AdminPosts({ navigation }: any) {
       description: "",
       image: "",
     });
+    setRichEditorContent("");
   };
 
   const handleCreatePost = async () => {
-    if (!newPost.title) {
+  try {
+    // Title validation rule
+    const requiresTitle =
+      newPost.category !== "decisions" &&
+      newPost.category !== "reforms" &&
+      newPost.category !== "events";
+
+    if (requiresTitle && !newPost.title?.trim()) {
       Alert.alert("Validation", "Title is required");
       return;
     }
 
-    // Initialize engagement fields (likes, comments, shares)
+    // Use HTML content for reforms & decisions
+    const content =
+      newPost.category === "decisions" ||
+      newPost.category === "reforms"
+        ? richEditorContent
+        : newPost.content;
+
     const postData = {
       ...newPost,
+      title: newPost.title?.trim() || null, // allow null for reforms/decisions
+      content,
       author: adminName || "Admin",
-      posterName: adminName || "Admin", // Added poster name
-      likes: 0, // Initialize likes
-      comments: 0, // Initialize comments
-      shares: 0, // Initialize shares
-      likedBy: [], // Track users who liked this post
+      posterName: adminName || "Admin",
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      likedBy: [],
       createdAt: serverTimestamp(),
     };
 
@@ -100,7 +120,12 @@ export default function AdminPosts({ navigation }: any) {
     resetForm();
     setShowCreateForm(false);
     fetchPosts();
-  };
+  } catch (error) {
+    console.error("Error creating post:", error);
+    Alert.alert("Error", "Failed to create post");
+  }
+};
+
 
   const handleDeletePost = async (id: string) => {
     Alert.alert("Delete", "Delete this post?", [
@@ -132,17 +157,33 @@ export default function AdminPosts({ navigation }: any) {
       description: post.description || "",
       image: post.image || "",
     });
+    if (post.category === "decisions" || post.category === "reforms") {
+      setRichEditorContent(post.content || "");
+    }
     setShowEditForm(true);
   };
 
   const handleUpdatePost = async () => {
-    if (!editingPost || !newPost.title) {
+    const requiresTitle =
+      newPost.category !== "decisions" &&
+      newPost.category !== "reforms" &&
+      newPost.category !== "events";
+
+    if (requiresTitle && (!editingPost || !newPost.title?.trim())) {
       Alert.alert("Validation", "Title is required");
       return;
     }
 
+    // Use HTML content for reforms & decisions
+    const content =
+      newPost.category === "decisions" ||
+      newPost.category === "reforms"
+        ? richEditorContent
+        : newPost.content;
+
     await updateDoc(doc(db, "posts", editingPost.id), {
       ...newPost,
+      content,
       updatedAt: serverTimestamp(),
     });
 
@@ -204,9 +245,9 @@ export default function AdminPosts({ navigation }: any) {
   );
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <Icon name="arrow-back" size={22} color="#fff" />
+        <Icon name="arrow-back" size={22} color="#333" />
         <Text style={styles.backText}>Back</Text>
       </TouchableOpacity>
 
@@ -244,6 +285,12 @@ export default function AdminPosts({ navigation }: any) {
                   onChangeText={t => setNewPost({ ...newPost, title: t })}
                 />
                 <TextInput
+                  style={styles.input}
+                  placeholder="Image URL (optional)"
+                  value={newPost.image}
+                  onChangeText={t => setNewPost({ ...newPost, image: t })}
+                />
+                <TextInput
                   style={styles.textarea}
                   placeholder="News content"
                   multiline
@@ -261,6 +308,12 @@ export default function AdminPosts({ navigation }: any) {
                   placeholder="Title"
                   value={newPost.title}
                   onChangeText={t => setNewPost({ ...newPost, title: t })}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Image URL (optional)"
+                  value={newPost.image}
+                  onChangeText={t => setNewPost({ ...newPost, image: t })}
                 />
                 <TextInput
                   style={styles.textarea}
@@ -281,12 +334,44 @@ export default function AdminPosts({ navigation }: any) {
                   value={newPost.decisionTitle}
                   onChangeText={t => setNewPost({ ...newPost, decisionTitle: t })}
                 />
+                <Text style={styles.label}>Decision Content (HTML Editor)</Text>
+                <RichToolbar
+                  editor={richText}
+                  actions={["bold", "italic", "image", "link", "fontSize"]}
+                  iconMap={{ insertImage: "image" }}
+                />
+                <RichEditor
+                  ref={richText}
+                  onChange={setRichEditorContent}
+                  placeholder="Enter decision content..."
+                  initialContentHTML={richEditorContent}
+                  style={styles.richEditor}
+                />
+              </>
+            )}
+
+            {/* REFORMS */}
+            {newPost.category === "reforms" && (
+              <>
                 <TextInput
-                  style={styles.textarea}
-                  placeholder="Decision details"
-                  multiline
-                  value={newPost.decisionDetails}
-                  onChangeText={t => setNewPost({ ...newPost, decisionDetails: t })}
+                  style={styles.input}
+                  placeholder="Reform title"
+                  value={newPost.decisionTitle}
+                  onChangeText={t => setNewPost({ ...newPost, decisionTitle: t })}
+                />
+                <Text style={styles.label}>Reform Content (HTML Editor)</Text>
+                <RichToolbar
+                  editor={richText}
+                  actions={["bold", "italic", "image", "link", "fontSize"]}
+                  iconMap={{ insertImage: "image" }}
+                />
+                <RichEditor
+
+                  ref={richText}
+                  onChange={setRichEditorContent}
+                  placeholder="Enter reform content..."
+                  initialContentHTML={richEditorContent}
+                  style={styles.richEditor}
                 />
               </>
             )}
@@ -299,6 +384,12 @@ export default function AdminPosts({ navigation }: any) {
                   placeholder="Event name"
                   value={newPost.eventName}
                   onChangeText={t => setNewPost({ ...newPost, eventName: t })}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Image URL (optional)"
+                  value={newPost.image}
+                  onChangeText={t => setNewPost({ ...newPost, image: t })}
                 />
                 <TextInput
                   style={styles.input}
@@ -349,6 +440,12 @@ export default function AdminPosts({ navigation }: any) {
                   onChangeText={t => setNewPost({ ...newPost, title: t })}
                 />
                 <TextInput
+                  style={styles.input}
+                  placeholder="Image URL (optional)"
+                  value={newPost.image}
+                  onChangeText={t => setNewPost({ ...newPost, image: t })}
+                />
+                <TextInput
                   style={styles.textarea}
                   placeholder="News content"
                   multiline
@@ -366,6 +463,12 @@ export default function AdminPosts({ navigation }: any) {
                   placeholder="Title"
                   value={newPost.title}
                   onChangeText={t => setNewPost({ ...newPost, title: t })}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Image URL (optional)"
+                  value={newPost.image}
+                  onChangeText={t => setNewPost({ ...newPost, image: t })}
                 />
                 <TextInput
                   style={styles.textarea}
@@ -386,12 +489,43 @@ export default function AdminPosts({ navigation }: any) {
                   value={newPost.decisionTitle}
                   onChangeText={t => setNewPost({ ...newPost, decisionTitle: t })}
                 />
+                <Text style={styles.label}>Decision Content (HTML Editor)</Text>
+                <RichToolbar
+                  editor={richText}
+                  actions={["bold", "italic", "insertImage", "fontSize"]}
+                  iconMap={{ insertImage: "image" }}
+                />
+                <RichEditor
+                  ref={richText}
+                  onChange={setRichEditorContent}
+                  placeholder="Enter decision content..."
+                  initialContentHTML={richEditorContent}
+                  style={styles.richEditor}
+                />
+              </>
+            )}
+
+            {/* REFORMS */}
+            {newPost.category === "reforms" && (
+              <>
                 <TextInput
-                  style={styles.textarea}
-                  placeholder="Decision details"
-                  multiline
-                  value={newPost.decisionDetails}
-                  onChangeText={t => setNewPost({ ...newPost, decisionDetails: t })}
+                  style={styles.input}
+                  placeholder="Reform title"
+                  value={newPost.decisionTitle}
+                  onChangeText={t => setNewPost({ ...newPost, decisionTitle: t })}
+                />
+                <Text style={styles.label}>Reform Content (HTML Editor)</Text>
+                <RichToolbar
+                  editor={richText}
+                  actions={["bold", "italic", "insertImage", "fontSize"]}
+                  iconMap={{ insertImage: "image" }}
+                />
+                <RichEditor
+                  ref={richText}
+                  onChange={setRichEditorContent}
+                  placeholder="Enter reform content..."
+                  initialContentHTML={richEditorContent}
+                  style={styles.richEditor}
                 />
               </>
             )}
@@ -404,6 +538,12 @@ export default function AdminPosts({ navigation }: any) {
                   placeholder="Event name"
                   value={newPost.eventName}
                   onChangeText={t => setNewPost({ ...newPost, eventName: t })}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Image URL (optional)"
+                  value={newPost.image}
+                  onChangeText={t => setNewPost({ ...newPost, image: t })}
                 />
                 <TextInput
                   style={styles.input}
@@ -437,6 +577,7 @@ export default function AdminPosts({ navigation }: any) {
         data={posts}
         keyExtractor={(i) => i.id}
         renderItem={renderPost}
+        scrollEnabled={false}
       />
 
       {/* CATEGORY MODAL */}
@@ -448,7 +589,7 @@ export default function AdminPosts({ navigation }: any) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {["news", "announcements", "decisions", "events"].map(c => (
+            {["news", "announcements", "decisions", "reforms", "events"].map(c => (
               <TouchableOpacity
                 key={c}
                 style={styles.modalItem}
@@ -466,7 +607,7 @@ export default function AdminPosts({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -483,6 +624,8 @@ const styles = StyleSheet.create({
   form: { marginBottom: 20 },
   input: { borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 6, marginBottom: 10 },
   textarea: { borderWidth: 1, borderColor: "#ddd", padding: 12, borderRadius: 6, height: 100, marginBottom: 10 },
+  label: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
+  richEditor: { borderWidth: 1, borderColor: "#ddd", borderRadius: 6, height: 200, marginBottom: 10 },
 
   inputWithIcon: { flexDirection: "row", alignItems: "center", padding: 12, borderWidth: 1, borderColor: "#ddd", borderRadius: 6, marginBottom: 10 },
   categoryText: { marginLeft: 10, fontWeight: "600" },

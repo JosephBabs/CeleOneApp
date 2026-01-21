@@ -107,7 +107,7 @@ const TvPlayerScreen = () => {
         ))}
       </ScrollView>
         {/* Previous Videos */}
-        <Text style={styles.sectionTitle}>Vidéos Précédentes</Text>
+        <Text style={styles.sectionTitle}>{t("tvPlayer.previousVideosTitle")}</Text>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}

@@ -130,6 +130,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#eee",
   },
+  divider: {
+    height: 1,
+    backgroundColor: "#E0E0E0",
+    marginVertical: 12,
+  },
   searchInput: {
     flex: 1,
     marginLeft: 8,
@@ -271,6 +276,73 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     marginTop: 20,
+  },
+  // Search and filter styles
+  searchInputContainer: {
+    position: 'relative',
+  },
+  searchInputWithTags: {
+    paddingRight: 80, // Space for clear button
+  },
+  selectedTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  tagBadge: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: COLORS.light.primary,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    margin: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tagBadgeText: {
+    color: COLORS.light.primary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  tagBadgeRemove: {
+    marginLeft: 6,
+    padding: 2,
+  },
+  tagsFilterContainer: {
+    marginBottom: 10,
+  },
+  tagsScroll: {
+    paddingHorizontal: 10,
+  },
+  tagButton: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  tagButtonSelected: {
+    backgroundColor: COLORS.light.primary,
+    borderColor: COLORS.light.primary,
+  },
+  tagButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  tagButtonTextSelected: {
+    color: '#fff',
+  },
+  clearSearchButton: {
+    position: 'absolute',
+    right: 8,
+    top: '50%',
+    transform: [{ translateY: -12 }],
+    padding: 4,
   },
 });
 

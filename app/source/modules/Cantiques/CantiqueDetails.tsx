@@ -4,14 +4,14 @@ import Icon from "react-native-vector-icons/Ionicons";
 import { COLORS } from "../../../core/theme/colors";
 import styless from "../../../../styles";
 import { d_assets } from "../../configs/assets";
+import { WebView } from "react-native-webview";
 
 interface RouteParams {
-  language: string;
-  hymnNumber: number;
+  cantique: any;
 }
 
 export default function CantiqueDetails({ route, navigation }: any) {
-  const { language, hymnNumber }: RouteParams = route.params;
+  const { cantique }: RouteParams = route.params;
   const [playing, setPlaying] = useState(false);
 
   const handlePlay = () => {
@@ -19,11 +19,46 @@ export default function CantiqueDetails({ route, navigation }: any) {
     // Here you would integrate audio playback logic
   };
 
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          padding: 16px;
+          margin: 0;
+          background-color: #fff;
+          color: #333;
+          font-size: 22px;
+          line-height: 1.5;
+        }
+        p { margin: 8px 0; line-height: 1.5; }
+        h3 { color: #333; margin: 16px 0 8px 0; }
+        strong { font-weight: bold; }
+        em { font-style: italic; }
+        ul, ol { margin: 8px 0; padding-left: 20px; }
+        li { margin: 4px 0; }
+        blockquote {
+          border-left: 4px solid #ddd;
+          padding-left: 16px;
+          margin: 16px 0;
+          color: #666;
+        }
+      </style>
+    </head>
+    <body>
+      ${cantique.hymnContent || "No content available"}
+    </body>
+    </html>
+  `;
+
   return (
     <View style={styles.container}>
       <View style={styless.header1}>
         <Image source={d_assets.images.appLogo} style={styless.logo} />
-        <Text style={styles.headerTitle}>Hymn {hymnNumber}</Text>
+        <Text style={styles.headerTitle}>{cantique.title}</Text>
         <View style={styless.headerIcons}>
           <TouchableOpacity onPress={() => navigation.navigate("Notifications")}>
             <Icon name="notifications-outline" size={24} color="#444" style={styless.iconRight} />
@@ -36,7 +71,10 @@ export default function CantiqueDetails({ route, navigation }: any) {
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.hymnCard}>
           <View style={styles.hymnHeader}>
-            <Text style={styles.hymnTitle}>Hymn {hymnNumber}</Text>
+            <View>
+              <Text style={styles.hymnTitle}>{cantique.title}</Text>
+              <Text style={styles.hymnSubtitle}>Hymn #{cantique.hymnNumber} • Key: {cantique.musicalKey || "Not specified"}</Text>
+            </View>
             <TouchableOpacity onPress={handlePlay}>
               <Icon
                 name={playing ? "pause-circle" : "play-circle"}
@@ -45,11 +83,15 @@ export default function CantiqueDetails({ route, navigation }: any) {
               />
             </TouchableOpacity>
           </View>
-          <Text style={styles.hymnContent}>
-            Full text content for Hymn {hymnNumber} in {language}. This is a placeholder text.
-            In a real implementation, this would contain the actual hymn lyrics and verses.
-            The content would be much longer with multiple verses, choruses, and stanzas.
-          </Text>
+          <WebView
+            source={{ html: htmlContent }}
+            style={styles.webView}
+            originWhitelist={['*']}
+            scalesPageToFit={true}
+            javaScriptEnabled={true}
+            
+            domStorageEnabled={true}
+          />
         </View>
       </ScrollView>
     </View>
@@ -84,9 +126,17 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
   },
+  hymnSubtitle: {
+    fontSize: 14,
+    color: "#666",
+  },
   hymnContent: {
     fontSize: 16,
     color: "#666",
     lineHeight: 24,
+  },
+  webView: {
+    height: 400,
+    width: '100%',
   },
 });

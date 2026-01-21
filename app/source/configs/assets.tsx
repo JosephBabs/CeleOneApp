@@ -7,6 +7,11 @@ export const d_assets = {
     postImg1: require("../../assets/images/posts/post1.jpg"),
     postImg2: require("../../assets/images/posts/post2.jpg"),
     chatBg: require("../../assets/images/chatBg.jpg"),
+    onboardingSlide1: require("../../assets/images/appLogo.png"),
+    onboardingSlide2: require("../../assets/images/cst.png"),
+    onboardingSlide3: require("../../assets/images/celeLogo.png")
+    // Add more images as needed
+  
     // auth
     // loginBg: require("../../assets/images/loginBg.png"),
     // icons

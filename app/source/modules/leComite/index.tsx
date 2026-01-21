@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { d_assets } from '../../configs/assets';
 import Icon from "react-native-vector-icons/Ionicons";
 import styless from "../../../../styles";
 
 export default function LeComite({ navigation }: any) {
+  const { t } = useTranslation();
   const committeeMembers = [
     { name: 'Justin AKA', image: d_assets.images.postImg1 },
     { name: 'Ajao MONLOUOLE', image: d_assets.images.postImg1 },
@@ -45,7 +47,7 @@ export default function LeComite({ navigation }: any) {
 
   return (
 
-    <View style={{ flex: 1, backgroundColor: '#F6F7FB' }}>
+    <View style={{ flex: 1, backgroundColor: '#F6F7FB', width: '100%',padding: 0 }}>
       <View style={styless.header1}>
         <Image source={d_assets.images.appLogo} style={styless.logo} />
         {/* <Text style={styles.titleSimple2}>{t("home.explore")}</Text> */}
@@ -75,24 +77,24 @@ export default function LeComite({ navigation }: any) {
               showsVerticalScrollIndicator={false}
             >
               {/* <Image source={require('../../../assets/images/celeLogo.png')} style={styles.logo} /> */}
-              <Text style={styles.title}>Le Sacré Collège</Text>
+              <Text style={styles.title}>{t('leComite.sacredCollege')}</Text>
               <Text style={styles.subtitle}>
-                Collège des Pasteurs dirigeants de l'ECC
+                {t('leComite.college')}
               </Text>
 
               {renderRow(firstRow)}
 
-              <Text style={styles.title}>Le CST</Text>
+              <Text style={styles.title}>{t('leComite.cst')}</Text>
               <Text style={styles.subtitle}>
-                Membres du comité supérieure de la transition
+                {t('leComite.cstMembers')}
               </Text>
 
               {renderRow(secondRow)}
               {renderRow(firstRow)}
 
-              <Text style={styles.title}>Le Saint Siège</Text>
+              <Text style={styles.title}>{t('leComite.holyThrone')}</Text>
               <Text style={styles.subtitle}>
-                Membres du comité supérieure de la transition
+                {t('leComite.throneMembers')}
               </Text>
 
               {renderRow(secondRow)}
@@ -110,7 +112,8 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingTop: 30,
-    paddingHorizontal: 20,
+    // paddingHorizontal: 20,
+    width: '100%',
     paddingBottom: 20,
     alignContent: 'flex-start',
     alignItems: 'flex-start',
@@ -126,6 +129,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     textAlign: 'center',
+    paddingLeft: 20,
     color: '#111',
   },
 
@@ -133,12 +137,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    paddingLeft: 20,
     marginBottom: 25,
   },
 
   row: {
     paddingBottom: 20,
     alignContent: "flex-start",
+    padding: 10,
   },
 
   card: {

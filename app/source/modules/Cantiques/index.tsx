@@ -6,17 +6,16 @@ import { COLORS } from "../../../core/theme/colors";
 import Icon from "react-native-vector-icons/Ionicons";
 import styless from "../../../../styles";
 import { d_assets } from "../../configs/assets";
-import { t } from "i18next";
-
-const cantiqueKeys = [
-  { key: "cantique_goun", label: t("cantiques.en_gou"), screen: "CantiqueGoun" },
-  { key: "cantique_yoruba", label: t("cantiques.en_yo"), screen: "CantiqueYoruba" },
-  { key: "cantique_anglais", label: t("cantiques.en_fr"), screen: "CantiqueAnglais" },
-  { key: "cantique_francais", label: t("cantiques.en_fr"), screen: "CantiqueFrancais" },
-];
 
 export default function Cantiques({ navigation }: any) {
   const { t } = useTranslation();
+
+  const cantiqueKeys = [
+    { key: "cantique_goun", label: t("cantiques.en_gou"), screen: "CantiqueGoun" },
+    { key: "cantique_yoruba", label: t("cantiques.en_yo"), screen: "CantiqueYoruba" },
+    { key: "cantique_francais", label: t("cantiques.en_fr"), screen: "CantiqueFrancais" },
+    { key: "cantique_anglais", label: t("cantiques.en_en"), screen: "CantiqueAnglais" },
+  ];
 
   const handleOpenCantique = (screen: string) => {
     navigation.navigate(screen);

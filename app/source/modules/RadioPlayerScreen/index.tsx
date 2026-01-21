@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import styles from './RadioPlayerStyle';
 import { d_assets } from '../../configs/assets';
@@ -23,6 +24,7 @@ const pastPrograms = [
 ];
 
 const RadioPlayerScreen = () => {
+  const { t } = useTranslation();
   const [isPlaying, setIsPlaying] = useState(false);
   const togglePlay = () => setIsPlaying(!isPlaying);
 
@@ -30,9 +32,9 @@ const RadioPlayerScreen = () => {
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.stationMeta}>96.5 Mghz</Text>
-        <Text style={styles.stationTitle}>Alléluia FM</Text>
-        <Text style={styles.favText}>115K+ Programmes</Text>
+        <Text style={styles.stationMeta}>{t('radio.frequency')}</Text>
+        <Text style={styles.stationTitle}>{t('radio.title')}</Text>
+        <Text style={styles.favText}>115K+ {t('radio.nowPlaying')}</Text>
         <TouchableOpacity style={styles.castIcon}>
           <Icon name="cast" size={20} color="#fff" />
         </TouchableOpacity>
@@ -43,7 +45,7 @@ const RadioPlayerScreen = () => {
         <Image source={d_assets.images.appLogo} style={styles.avatar} />
         <View style={styles.playingText}>
           <Text style={styles.songTitle}>Culte dominicale 25/09</Text>
-          <Text style={styles.nowPlayingLabel}>En directe</Text>
+          <Text style={styles.nowPlayingLabel}>{t('radio.live')}</Text>
         </View>
         <TouchableOpacity onPress={togglePlay} style={styles.playButton}>
           <Icon name={isPlaying ? 'pause' : 'play'} size={24} color="#fff" />
@@ -60,15 +62,15 @@ const RadioPlayerScreen = () => {
           </View>
         </View>
         <View style={styles.liveBadge}>
-          <Text style={styles.liveText}>Live</Text>
+          <Text style={styles.liveText}>{t('radio.live')}</Text>
         </View>
         <Text style={styles.listeners}>1.1K</Text>
       </View>
 
       {/* Upcoming Programs */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Programmes suivants</Text>
-        <Text style={styles.sectionLink}>Voir Tout</Text>
+        <Text style={styles.sectionTitle}>{t('radio.upcomingPrograms')}</Text>
+        <Text style={styles.sectionLink}>{t('radio.viewAll')}</Text>
       </View>
       <FlatList
         data={upcomingPrograms}
@@ -87,8 +89,8 @@ const RadioPlayerScreen = () => {
 
       {/* Past Programs */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Podcasts</Text>
-        <Text style={styles.sectionLink}>Voir Tout</Text>
+        <Text style={styles.sectionTitle}>{t('radio.podcasts')}</Text>
+        <Text style={styles.sectionLink}>{t('radio.viewAll')}</Text>
       </View>
       <View style={styles.grid}>
         {pastPrograms.map((item) => (

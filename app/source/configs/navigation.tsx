@@ -34,6 +34,7 @@ import AdminUsers from "../modules/Admin/AdminUsers";
 import AdminChatrooms from "../modules/Admin/AdminChatrooms";
 import AdminPendingRequests from "../modules/Admin/AdminPendingRequests";
 import AdminProfiles from "../modules/Admin/AdminProfiles";
+import AdminCantiques from "../modules/Admin/AdminCantiques";
 import TenCommandments from "../modules/Documents/TenCommandments";
 import ChurchHistory from "../modules/Documents/ChurchHistory";
 import OshOffa from "../modules/Documents/OshOffa";
@@ -51,7 +52,7 @@ import CantiqueDetails from "../modules/Cantiques/CantiqueDetails";
 
 export type RootStackParamList = {
   Splash: undefined;
-  Onboarding: undefined;
+  OnboardingScreen: undefined;
   Login: undefined;
   Signup: undefined;
   HomeScreen: undefined;
@@ -70,6 +71,7 @@ export type RootStackParamList = {
   AdminChatrooms: undefined;
   AdminPendingRequests: undefined;
   AdminProfiles: undefined;
+  AdminCantiques: undefined;
   TenCommandments: undefined;
   ChurchHistory: undefined;
   OshOffa: undefined;
@@ -131,28 +133,35 @@ export default function AppNavigator() {
   const [languageSet, setLanguageSet] = useState<boolean | null>(null);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
 
+  const resetOnboarding = async () => {
+    await AsyncStorage.removeItem("hasLaunched");
+    console.log(
+      "✅ Onboarding state cleared. Next launch will show onboarding again."
+    );
+  };
+
   useEffect(() => {
-    const init = async () => {
+    const checkAppState = async () => {
       const launched = await AsyncStorage.getItem("hasLaunched");
-      const lang = await AsyncStorage.getItem("user-language");
+      const userLanguage = await AsyncStorage.getItem("user-language");
 
       if (!launched) {
         setIsFirstLaunch(true);
-        await AsyncStorage.setItem("hasLaunched", "true");
       } else {
         setIsFirstLaunch(false);
       }
 
-      if (!lang) {
+      if (!userLanguage) {
         setLanguageSet(false);
         setLanguageModalVisible(true);
       } else {
-        await i18n.changeLanguage(lang);
         setLanguageSet(true);
+        await i18n.changeLanguage(userLanguage);
       }
     };
+    checkAppState();
 
-    init();
+    // resetOnboarding();
   }, [i18n]);
 
   const handleSelectLanguage = async (lng: string) => {
@@ -182,7 +191,7 @@ export default function AppNavigator() {
             screenOptions={{ headerShown: false }}
           >
             <Stack.Screen name="Splash" component={SplashScreenWrapper} />
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="OnboardingScreen" component={OnboardingScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
             <Stack.Screen name="MainNav" component={BottomTabNavigator} />
@@ -200,6 +209,7 @@ export default function AppNavigator() {
             <Stack.Screen name="AdminUsers" component={AdminUsers} />
             <Stack.Screen name="AdminChatrooms" component={AdminChatrooms} />
             <Stack.Screen name="AdminPendingRequests" component={AdminPendingRequests} />
+            <Stack.Screen name="AdminCantiques" component={AdminCantiques} />
             <Stack.Screen name="TenCommandments" component={TenCommandments} />
             <Stack.Screen name="ChurchHistory" component={ChurchHistory} />
             <Stack.Screen name="OshOffa" component={OshOffa} />
@@ -226,12 +236,13 @@ export default function AppNavigator() {
 const SplashScreenWrapper = ({ navigation }: any) => {
   useEffect(() => {
     const timer = setTimeout(async () => {
+      
       const launched = await AsyncStorage.getItem("hasLaunched");
       const lang = await AsyncStorage.getItem("user-language");
 
       if (!lang) return;
 
-      navigation.replace(launched ? "Login" : "Onboarding");
+      navigation.replace(launched ? "Login" : "OnboardingScreen");
     }, 2000);
 
     return () => clearTimeout(timer);

@@ -4,24 +4,42 @@ import { d_assets } from '../../configs/assets';
 import { auth } from '../../modules/auth/firebaseConfig'; // adjust path to your firebaseConfig
 import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
+// import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SplashScreen: React.FC = () => {
   const navigation = useNavigation<any>();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('User is logged in:', user.uid);
-        // Navigate to MainNav
-        navigation.replace('MainNav');
-      } else {
-        console.log('No user logged in, redirecting to Login');
-        // Navigate to Login
+    const checkAuth = async () => {
+      try {
+        const launched = await AsyncStorage.getItem('hasLaunched');
+
+        if (!launched) {
+          navigation.replace('OnboardingScreen');
+        } else {
+          const unsubscribe = onAuthStateChanged(auth, user => {
+            if (user) {
+              console.log('User is logged in:', user.uid);
+              // Navigate to MainNav
+              navigation.replace('MainNav');
+            } else {
+              console.log('No user logged in, redirecting to Login');
+              // Navigate to Login
+              navigation.replace('Login');
+            }
+          });
+
+          return () => unsubscribe();
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+        // Fallback to Login if error
         navigation.replace('Login');
       }
-    });
+    };
 
-    return () => unsubscribe();
+    checkAuth();
   }, [navigation]);
 
   return (

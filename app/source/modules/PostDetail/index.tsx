@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Modal from 'react-native-modal';
 import ImageViewer from 'react-native-image-zoom-viewer';
@@ -35,6 +36,7 @@ import {
 import { d_assets } from '../../configs/assets';
 
 export default function PostDetail({ route, navigation }: any) {
+  const { t } = useTranslation();
   const { post } = route.params;
 
   const [isImageModalVisible, setImageModalVisible] = useState(false);
@@ -822,12 +824,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F0F2F5',
+    height: '100%',
   },
 
   facebookCard: {
-    backgroundColor: '#fff',
-    marginBottom: 12,
+    backgroundColor: '#fafeffff',
+    // marginBottom: 12,
     paddingTop: 12,
+    flex: 1,
+    // height: '100%',
+    // alignItems: 'space-between',
+    justifyContent: 'space-between',
   },
 
   profileRow: {
@@ -870,7 +877,7 @@ const styles = StyleSheet.create({
 
   media: {
     width: '100%',
-    height: 360,
+    height: 380,
     marginVertical: 8,
   },
 

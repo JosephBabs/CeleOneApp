@@ -36,6 +36,7 @@ import {
   query,
   getDocs,
   getDoc,
+  where,
 } from "firebase/firestore";
 
 interface Message {
@@ -66,6 +67,7 @@ interface User {
   firstName: string;
   lastName: string;
   email: string;
+  avatar?: string;
   role?: string;
 }
 
@@ -103,14 +105,31 @@ export default function ChatRoom({ route, navigation }: any) {
   
   // Pin states
   const [showPinnedList, setShowPinnedList] = useState(false);
+  const [isMember, setIsMember] = useState(false);
+  const [joinRequestSent, setJoinRequestSent] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasReplies, setHasReplies] = useState(false);
 
   // Initialize current user and chat room
   useEffect(() => {
     fetchCurrentUser();
     fetchChatRoom();
-    fetchMessages();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
+
+  useEffect(() => {
+    if (currentUser && chatRoom) {
+      const userIsMember = chatRoom.members?.includes(currentUser.id) || false;
+      setIsMember(userIsMember);
+
+      if (userIsMember) {
+        fetchMessages();
+      } else {
+        checkPendingRequest();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, chatRoom]);
 
   const fetchCurrentUser = async () => {
     try {
@@ -139,13 +158,54 @@ export default function ChatRoom({ route, navigation }: any) {
     }
   };
 
+  const checkPendingRequest = async () => {
+    try {
+      if (!currentUser) return;
+
+      const requestsQuery = query(
+        collection(db, "joinRequests"),
+        where("userId", "==", currentUser.id),
+        where("chatRoomId", "==", chatId)
+      );
+
+      const querySnapshot = await getDocs(requestsQuery);
+      const hasPendingRequest = !querySnapshot.empty;
+      setJoinRequestSent(hasPendingRequest);
+    } catch (error) {
+      console.error("Error checking pending request:", error);
+    }
+  };
+
+  const sendJoinRequest = async () => {
+    try {
+      if (!currentUser || !chatRoom) return;
+
+      const requestData = {
+        userId: currentUser.id,
+        userName: `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim(),
+        userEmail: currentUser.email,
+        chatRoomId: chatId,
+        chatRoomName: chatRoom.name,
+        status: "pending",
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, "joinRequests"), requestData);
+      setJoinRequestSent(true);
+      Alert.alert("Success", "Join request sent successfully!");
+    } catch (error) {
+      console.error("Error sending join request:", error);
+      Alert.alert("Error", "Failed to send join request. Please try again.");
+    }
+  };
+
   const fetchMessages = async () => {
     try {
       setLoading(true);
       const messagesQuery = query(
         collection(db, "chatrooms", chatId, "messages")
       );
-      
+
       const unsubscribe = onSnapshot(
         messagesQuery,
         (querySnapshot) => {
@@ -190,7 +250,25 @@ export default function ChatRoom({ route, navigation }: any) {
             return timeA.getTime() - timeB.getTime();
           });
 
+          // Calculate unread count and check for replies
+          let unreadCount = 0;
+          let hasReplies = false;
+
+          fetchedMessages.forEach((message) => {
+            if (message.sender === "other") {
+              // Check if this message is a reply to current user
+              if (message.replyToUsername === currentUser?.firstName ||
+                  message.replyToUsername === currentUser?.lastName ||
+                  message.replyToUsername === `${currentUser?.firstName} ${currentUser?.lastName}`.trim()) {
+                hasReplies = true;
+              }
+              unreadCount++;
+            }
+          });
+
           setMessages(fetchedMessages);
+          setUnreadCount(unreadCount);
+          setHasReplies(hasReplies);
           setLoading(false);
         },
         (error) => {
@@ -238,9 +316,9 @@ export default function ChatRoom({ route, navigation }: any) {
     } catch (error: any) {
       console.error("Error sending message:", error);
       if (error.code === 'permission-denied') {
-        Alert.alert("Permission Denied", "You don't have permission to send messages in this group.");
+        Alert.alert(t('chatRoomAlerts.permissionDenied'), t('chatRoomAlerts.noPermissionSend'));
       } else {
-        Alert.alert("Error", `Failed to send message: ${error.message}`);
+        Alert.alert(t('chatRoomAlerts.error'), t('chatRoomAlerts.failedSendMessage'));
       }
     }
   };
@@ -248,23 +326,23 @@ export default function ChatRoom({ route, navigation }: any) {
   const handleDeleteMessage = async (messageId: string) => {
     try {
       Alert.alert(
-        "Delete Message",
-        "Delete this message from all users?",
+        t('chatRoomAlerts.deleteMessage'),
+        t('chatRoomAlerts.deleteMessageConfirm'),
         [
-          { text: "Cancel", onPress: () => setShowMessageMenu(false) },
+          { text: t('chatRoomAlerts.cancel'), onPress: () => setShowMessageMenu(false) },
           {
-            text: "Delete",
+            text: t('chatRoomAlerts.delete'),
             onPress: async () => {
               try {
                 await deleteDoc(doc(db, "chatrooms", chatId, "messages", messageId));
                 setShowMessageMenu(false);
-                Alert.alert("Success", "Message deleted");
+                Alert.alert(t('chatRoomAlerts.success'), t('chatRoomAlerts.messageDeleted'));
               } catch (error: any) {
                 console.error("Error deleting message:", error);
                 if (error.code === 'permission-denied') {
-                  Alert.alert("Error", "You don't have permission to delete this message");
+                  Alert.alert(t('chatRoomAlerts.error'), t('chatRoomAlerts.noPermissionDelete'));
                 } else {
-                  Alert.alert("Error", "Failed to delete message");
+                  Alert.alert(t('chatRoomAlerts.error'), t('chatRoomAlerts.failedDelete'));
                 }
               }
             },
@@ -290,11 +368,11 @@ export default function ChatRoom({ route, navigation }: any) {
         await updateDoc(roomRef, {
           pinnedMessages: arrayRemove(messageId),
         });
-        Alert.alert("Success", "Message unpinned");
+        Alert.alert(t('chatRoomAlerts.success'), t('chatRoomAlerts.messageUnpinned'));
       } else {
         // Check if at max pins (7)
         if (currentPins.length >= 7) {
-          Alert.alert("Limit Reached", "Maximum 7 pinned messages allowed. Remove a pin first.");
+          Alert.alert(t('chatRoomAlerts.limitReached'), t('chatRoomAlerts.maxPins'));
           return;
         }
 
@@ -306,7 +384,7 @@ export default function ChatRoom({ route, navigation }: any) {
         await updateDoc(roomRef, {
           pinnedMessages: arrayUnion(messageId),
         });
-        Alert.alert("Success", "Message pinned for 24 hours");
+        Alert.alert(t('chatRoomAlerts.success'), t('chatRoomAlerts.messagePinned'));
       }
       setShowMessageMenu(false);
     } catch (error) {
@@ -316,7 +394,7 @@ export default function ChatRoom({ route, navigation }: any) {
 
   const handleRemovePin = async (messageId: string) => {
     if (!chatRoom?.admins?.includes(auth.currentUser?.uid || "")) {
-      Alert.alert("Permission Denied", "Only admins can remove pins");
+      Alert.alert(t('chatRoomAlerts.permissionDenied'), t('chatRoomAlerts.onlyAdminsPin'));
       return;
     }
 
@@ -325,7 +403,7 @@ export default function ChatRoom({ route, navigation }: any) {
       await updateDoc(roomRef, {
         pinnedMessages: arrayRemove(messageId),
       });
-      Alert.alert("Success", "Pin removed");
+      Alert.alert(t('chatRoomAlerts.success'), t('chatRoomAlerts.pinRemoved'));
     } catch (error) {
       console.error("Error removing pin:", error);
     }
@@ -333,7 +411,7 @@ export default function ChatRoom({ route, navigation }: any) {
 
   const handleBlockUser = async (userId: string, userName: string) => {
     if (!chatRoom?.admins?.includes(auth.currentUser?.uid || "")) {
-      Alert.alert("Permission Denied", "Only admins can block users");
+      Alert.alert(t('chatRoomAlerts.permissionDenied'), t('chatRoomAlerts.onlyAdminsBlock'));
       return;
     }
 
@@ -342,7 +420,7 @@ export default function ChatRoom({ route, navigation }: any) {
       await updateDoc(roomRef, {
         blockedUsers: arrayUnion(userId),
       });
-      Alert.alert("Success", `${userName} blocked from writing`);
+      Alert.alert(t('chatRoomAlerts.success'), `${userName} ${t('chatRoomAlerts.userBlocked')}`);
       setShowUserAdminMenu(false);
     } catch (error) {
       console.error("Error blocking user:", error);
@@ -351,7 +429,7 @@ export default function ChatRoom({ route, navigation }: any) {
 
   const handleMakeAdmin = async (userId: string, userName: string) => {
     if (!chatRoom?.admins?.includes(auth.currentUser?.uid || "")) {
-      Alert.alert("Permission Denied", "Only admins can assign admins");
+      Alert.alert(t('chatRoomAlerts.permissionDenied'), t('chatRoomAlerts.onlyAdminsAssign'));
       return;
     }
 
@@ -360,7 +438,7 @@ export default function ChatRoom({ route, navigation }: any) {
       await updateDoc(roomRef, {
         admins: arrayUnion(userId),
       });
-      Alert.alert("Success", `${userName} is now an admin`);
+      Alert.alert(t('chatRoomAlerts.success'), `${userName} ${t('chatRoomAlerts.userAdmin')}`);
       setShowUserAdminMenu(false);
     } catch (error) {
       console.error("Error making admin:", error);
@@ -369,21 +447,21 @@ export default function ChatRoom({ route, navigation }: any) {
 
   const handleCloseGroup = async () => {
     if (!chatRoom?.admins?.includes(auth.currentUser?.uid || "")) {
-      Alert.alert("Permission Denied", "Only admins can close the group");
+      Alert.alert(t('chatRoomAlerts.permissionDenied'), t('chatRoomAlerts.onlyAdminsClose'));
       return;
     }
 
-    Alert.alert("Close Group", "This will prevent new messages. Continue?", [
-      { text: "Cancel" },
+    Alert.alert(t('chatRoomAlerts.closeGroup'), t('chatRoomAlerts.closeGroupConfirm'), [
+      { text: t('chatRoomAlerts.cancel') },
       {
-        text: "Close",
+        text: t('chatRoomAlerts.close'),
         onPress: async () => {
           try {
             const roomRef = doc(db, "chatrooms", chatId);
             await updateDoc(roomRef, {
               isClosed: true,
             });
-            Alert.alert("Success", "Group closed");
+            Alert.alert(t('chatRoomAlerts.success'), t('chatRoomAlerts.groupClosed'));
           } catch (error) {
             console.error("Error closing group:", error);
           }
@@ -445,7 +523,8 @@ export default function ChatRoom({ route, navigation }: any) {
         >
           {!isMe && (
             <Image
-              source={{ uri: item.avatar }}
+              // source={{ uri: item.avatar }}
+              source={d_assets.images.appLogo}
               style={styles.userAvatar}
               defaultSource={d_assets.images.appLogo}
             />
@@ -465,12 +544,12 @@ export default function ChatRoom({ route, navigation }: any) {
             {!isMe && <Text style={styles.username}>{item.username}</Text>}
 
             {item.replyTo && (
-              <View style={styles.replyBox}>
+              <TouchableOpacity style={styles.replyBox} onPress={() => handleScrollToMessage(item.replyTo!)}>
                 <Text style={styles.replyLabel}>↳ {item.replyToUsername}</Text>
                 <Text style={[styles.replyText, { fontStyle: "italic" }]} numberOfLines={3}>
                   {messages.find((m) => m.id === item.replyTo)?.text || "Media message"}
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
 
             {item.isPinned && (
@@ -534,43 +613,79 @@ export default function ChatRoom({ route, navigation }: any) {
                 </Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowPinnedList(true)}>
-              <Ionicons name="pin" size={22} color="#FF6B6B" />
-            </TouchableOpacity>
-            {isAdmin && (
-              <TouchableOpacity
-                onPress={() => setShowGroupSettings(true)}
-                style={{ marginLeft: 8 }}
-              >
-                <Ionicons name="settings-outline" size={22} color="#000" />
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              
+              <TouchableOpacity onPress={() => setShowPinnedList(true)}>
+                <Ionicons name="pin" size={22} color="#FF6B6B" />
               </TouchableOpacity>
-            )}
+              {isAdmin && (
+                <TouchableOpacity
+                  onPress={() => setShowGroupSettings(true)}
+                  style={{ marginLeft: 8 }}
+                >
+                  <Ionicons name="settings-outline" size={22} color="#000" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
-          {/* Messages */}
-          
-          <View style={styles.chatBg}>
-            <Image
-              source={d_assets.images.chatBg}
-              style={styles.chatTiledBg}
-              resizeMode="repeat" // works only on iOS
-            />
-            {loading ? (
-              <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                <Text>Loading messages...</Text>
-              </View>
-            ) : (
-              <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={(item) => item.id}
-                renderItem={renderMessage}
-                contentContainerStyle={styles.chatList}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
+          {/* Messages or Join Request */}
+          {isMember ? (
+            <View style={styles.chatBg}>
+              <Image
+                source={d_assets.images.chatBg}
+                style={styles.chatTiledBg}
+                resizeMode="repeat" // works only on iOS
               />
-            )}
-          </View>
+              {loading ? (
+                <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+                  <Text>{t('chatRoom.loadingMessages')}</Text>
+                </View>
+              ) : (
+                <FlatList
+                  ref={flatListRef}
+                  data={messages}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderMessage}
+                  contentContainerStyle={styles.chatList}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                />
+              )}
+            </View>
+          ) : (
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
+                Join {chatName}
+              </Text>
+              <Text style={{ textAlign: "center", color: "#666", marginBottom: 20 }}>
+                This is a private chat room. Send a join request to participate.
+              </Text>
+              {joinRequestSent ? (
+                <View style={{ alignItems: "center" }}>
+                  <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
+                  <Text style={{ marginTop: 10, color: "#4CAF50", fontWeight: "500" }}>
+                    Join request sent
+                  </Text>
+                  <Text style={{ marginTop: 5, color: "#666", textAlign: "center" }}>
+                    Your request is pending approval from the administrators.
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: COLORS.light.primary,
+                    paddingHorizontal: 30,
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                  }}
+                  onPress={sendJoinRequest}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "600" }}>Send Join Request</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Replying Preview */}
           {replyingTo && (
@@ -585,27 +700,29 @@ export default function ChatRoom({ route, navigation }: any) {
           )}
 
           {/* Input Area */}
-          <View style={styles.inputArea}>
-            <TouchableOpacity onPress={() => setShowAttachmentSheet(true)}>
-              <Ionicons name="document-attach-outline" size={24} color="#555" />
-            </TouchableOpacity>
-            <TouchableOpacity style={{ marginHorizontal: 8 }}>
-              <Ionicons name="mic-outline" size={24} color="#555" />
-            </TouchableOpacity>
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              placeholderTextColor="#aaa"
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              maxLength={500}
-              editable={!chatRoom?.isClosed && !chatRoom?.blockedUsers?.includes(auth.currentUser?.uid || "")}
-            />
-            <TouchableOpacity onPress={sendMessage}>
-              <Ionicons name="send" size={24} color="#2FA5A9" />
-            </TouchableOpacity>
-          </View>
+          {isMember && (
+            <View style={styles.inputArea}>
+              <TouchableOpacity>
+                <Ionicons name="document-attach-outline" size={24} color="#555" />
+              </TouchableOpacity>
+              <TouchableOpacity style={{ marginHorizontal: 8 }}>
+                <Ionicons name="mic-outline" size={24} color="#555" />
+              </TouchableOpacity>
+              <TextInput
+                style={styles.input}
+                placeholder="Type a message..."
+                placeholderTextColor="#aaa"
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+                maxLength={500}
+                editable={!chatRoom?.isClosed && !chatRoom?.blockedUsers?.includes(auth.currentUser?.uid || "")}
+              />
+              <TouchableOpacity onPress={sendMessage}>
+                <Ionicons name="send" size={24} color="#2FA5A9" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
 

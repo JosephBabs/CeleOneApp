@@ -8,13 +8,9 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
-  Modal,
-  Pressable,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import LinearGradient from "react-native-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { d_assets } from "../../configs/assets";
 
 const { width } = Dimensions.get("window");
@@ -41,30 +37,21 @@ const slides = [
 ];
 
 const OnboardingScreen = ({ navigation }: any) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const scrollX = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
-  const handleNext = async () => {
+  const handleNext = () => {
     if (currentIndex < slides.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      await AsyncStorage.setItem("hasLaunched", "true");
       navigation.replace("Login");
     }
   };
 
-  const handleSkip = async () => {
-    await AsyncStorage.setItem("hasLaunched", "true");
+  const handleSkip = () => {
     navigation.replace("Login");
-  };
-
-  const handleSelectLanguage = async (lng: string) => {
-    await AsyncStorage.setItem("user-language", lng);
-    await i18n.changeLanguage(lng);
-    setLanguageModalVisible(false);
   };
 
   const renderPagination = () => (
@@ -96,10 +83,6 @@ const OnboardingScreen = ({ navigation }: any) => {
       colors={["#E0F7FA", "#FDFEFF"]}
       style={styles.container}
     >
-      <TouchableOpacity style={styles.languageBtn} onPress={() => setLanguageModalVisible(true)}>
-        <Text style={styles.languageBtnText}>{t("settings.language")}</Text>
-      </TouchableOpacity>
-
       <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
         <Text style={styles.skipText}>{t("onboard.skip")}</Text>
       </TouchableOpacity>
@@ -137,26 +120,6 @@ const OnboardingScreen = ({ navigation }: any) => {
             : t("onboard.next")}
         </Text>
       </TouchableOpacity>
-
-      <Modal transparent visible={languageModalVisible} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <SafeAreaView style={styles.modalContent}>
-            <Text style={styles.title}>{t("settings.selectLanguage")}</Text>
-
-            {["en", "fr", "yo", "gou", "es"].map(lng => (
-              <Pressable
-                key={lng}
-                style={styles.languageItem}
-                onPress={() => handleSelectLanguage(lng)}
-              >
-                <Text style={styles.languageText}>
-                  {t(`lang.${lng}`)}
-                </Text>
-              </Pressable>
-            ))}
-          </SafeAreaView>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 };
@@ -167,17 +130,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 60,
     paddingBottom: 40,
-  },
-  languageBtn: {
-    position: "absolute",
-    top: 20,
-    left: 20,
-    zIndex: 1,
-  },
-  languageBtnText: {
-    color: "#64C7C3",
-    fontSize: 16,
-    fontWeight: "600",
   },
   skipBtn: {
     position: "absolute",
@@ -238,26 +190,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 24,
-  },
-  languageItem: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderColor: "#ddd",
-  },
-  languageText: {
-    fontSize: 18,
-    textAlign: "center",
   },
 });
 

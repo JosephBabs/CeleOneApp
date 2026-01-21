@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from "react-native";
 // import { Ionicons } from "@expo/vector-icons";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useTranslation } from "react-i18next";
 // import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
@@ -25,21 +26,87 @@ import Animated, {
 } from "react-native-reanimated";
 import { COLORS } from "../../../core/theme/colors";
 // import { COLORS } from "../theme/colors";
+import { d_assets } from "../../configs/assets";
+import { auth, db } from "../auth/firebaseConfig";
+import {
+  collection,
+  getDoc,
+  doc,
+} from "firebase/firestore";
 
-const membersMock = [
-  { id: "1", name: "John Doe", avatar: "https://i.pravatar.cc/100?img=1" },
-  { id: "2", name: "Jane Smith", avatar: "https://i.pravatar.cc/100?img=2" },
-  { id: "3", name: "Ahmed Bello", avatar: "https://i.pravatar.cc/100?img=3" },
-  { id: "4", name: "Linda Okoro", avatar: "https://i.pravatar.cc/100?img=4" },
-  { id: "5", name: "Carlos Lopez", avatar: "https://i.pravatar.cc/100?img=5" },
-  // add more...
-];
+interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatar?: string;
+  role?: string;
+}
+
+interface ChatRoom {
+  id: string;
+  name: string;
+  avatar: string;
+  createdBy: string;
+  members: string[];
+  admins: string[];
+  pinnedMessages: string[];
+  blockedUsers: string[];
+  isClosed: boolean;
+}
 
 export default function GroupInfo({ route, navigation }: any) {
-  const { chatName, chatAvatar } = route.params;
+  const { t } = useTranslation();
+  const { chatId, chatName, chatAvatar } = route.params;
   const [isMuted, setIsMuted] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [members, setMembers] = useState<User[]>([]);
+  const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
+  const [loading, setLoading] = useState(true);
   // const insets = useSafeAreaInsets();
+
+  const fetchChatRoom = useCallback(async () => {
+    try {
+      setLoading(true);
+      const roomDoc = await getDoc(doc(db, "chatrooms", chatId));
+      if (roomDoc.exists()) {
+        const roomData = { id: roomDoc.id, ...roomDoc.data() } as ChatRoom;
+        setChatRoom(roomData);
+        await fetchMembers(roomData.members || []);
+      }
+    } catch (error) {
+      console.error("Error fetching chat room:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [chatId]);
+
+  useEffect(() => {
+    if (chatId) {
+      fetchChatRoom();
+    }
+  }, [chatId, fetchChatRoom]);
+
+  const fetchMembers = async (memberIds: string[]) => {
+    try {
+      const memberPromises = memberIds.map(async (userId) => {
+        const userDoc = await getDoc(doc(db, "user_data", userId));
+        if (userDoc.exists()) {
+          return {
+            id: userDoc.id,
+            ...userDoc.data(),
+          } as User;
+        }
+        return null;
+      });
+
+      const membersData = await Promise.all(memberPromises);
+      const validMembers = membersData.filter((member) => member !== null) as User[];
+      setMembers(validMembers);
+    } catch (error) {
+      console.error("Error fetching members:", error);
+    }
+  };
 
   const HEADER_EXPANDED_HEIGHT = 250;
   const HEADER_COLLAPSED_HEIGHT = 70;
@@ -73,23 +140,23 @@ export default function GroupInfo({ route, navigation }: any) {
   };
 
   const handleExitGroup = () => {
-    Alert.alert("Exit Group", "Are you sure you want to exit?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Exit", style: "destructive", onPress: () => navigation.goBack() },
+    Alert.alert(t("groupInfo.exitGroup"), t("groupInfo.exitGroupConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("groupInfo.exitGroup"), style: "destructive", onPress: () => navigation.goBack() },
     ]);
   };
 
   const handleDeleteConversation = () => {
-    Alert.alert("Delete", "Delete this conversation?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => {} },
+    Alert.alert(t("groupInfo.deleteConversation"), t("groupInfo.deleteConversationConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("groupInfo.deleteConversation"), style: "destructive", onPress: () => {} },
     ]);
   };
 
   const handleReportGroup = () => {
-    Alert.alert("Report Group", "This will notify the admin", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Report", style: "default", onPress: () => {} },
+    Alert.alert(t("groupInfo.reportGroup"), t("groupInfo.reportGroupConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("groupInfo.reportGroup"), style: "default", onPress: () => {} },
     ]);
   };
 
@@ -103,7 +170,7 @@ export default function GroupInfo({ route, navigation }: any) {
         </View>
         <Animated.Image source={{ uri: chatAvatar }} style={[styles.avatar, animatedImageStyle]} />
         <Text style={styles.groupName}>{chatName}</Text>
-        <Text style={styles.groupDesc}>Public Group • 23,421 members</Text>
+        <Text style={styles.groupDesc}>{t("groupInfo.publicGroup")} • {t("groupInfo.membersCount", { count: 23421 })}</Text>
       </Animated.View>
 
       <Animated.ScrollView
@@ -114,7 +181,7 @@ export default function GroupInfo({ route, navigation }: any) {
       >
         <View style={styles.optionRow}>
           <Ionicons name="notifications-off-outline" size={22} color="#555" />
-          <Text style={styles.optionText}>Mute Notifications</Text>
+          <Text style={styles.optionText}>{t("groupInfo.muteNotifications")}</Text>
           <Switch
             value={isMuted}
             onValueChange={setIsMuted}
@@ -124,7 +191,7 @@ export default function GroupInfo({ route, navigation }: any) {
 
         <TouchableOpacity style={styles.optionRow} onPress={handleShareGroupLink}>
           <Ionicons name="link-outline" size={22} color="#555" />
-          <Text style={styles.optionText}>Group Invite Link</Text>
+          <Text style={styles.optionText}>{t("groupInfo.groupInviteLink")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -132,22 +199,22 @@ export default function GroupInfo({ route, navigation }: any) {
           onPress={() => setShowMembersModal(true)}
         >
           <Ionicons name="people-outline" size={22} color="#555" />
-          <Text style={styles.optionText}>View Group Members</Text>
+          <Text style={styles.optionText}>{t("groupInfo.viewGroupMembers")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.optionRow} onPress={handleDeleteConversation}>
           <Ionicons name="trash-outline" size={22} color="orangered" />
-          <Text style={[styles.optionText, { color: "orangered" }]}>Delete Conversation</Text>
+          <Text style={[styles.optionText, { color: "orangered" }]}>{t("groupInfo.deleteConversation")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.optionRow} onPress={handleReportGroup}>
           <Ionicons name="flag-outline" size={22} color="tomato" />
-          <Text style={[styles.optionText, { color: "tomato" }]}>Report Group</Text>
+          <Text style={[styles.optionText, { color: "tomato" }]}>{t("groupInfo.reportGroup")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.optionRow, { marginTop: 20 }]} onPress={handleExitGroup}>
           <Ionicons name="exit-outline" size={22} color="red" />
-          <Text style={[styles.optionText, { color: "red" }]}>Exit Group</Text>
+          <Text style={[styles.optionText, { color: "red" }]}>{t("groupInfo.exitGroup")}</Text>
         </TouchableOpacity>
       </Animated.ScrollView>
 
@@ -155,18 +222,29 @@ export default function GroupInfo({ route, navigation }: any) {
       <Modal visible={showMembersModal} animationType="slide" onRequestClose={() => setShowMembersModal(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Group Members</Text>
+            <Text style={styles.modalTitle}>{t("groupInfo.groupMembers")}</Text>
             <TouchableOpacity onPress={() => setShowMembersModal(false)}>
               <Ionicons name="close" size={26} color="#000" />
             </TouchableOpacity>
           </View>
           <FlatList
-            data={membersMock}
+            data={members}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={styles.memberItem}>
-                <Image source={{ uri: item.avatar }} style={styles.memberAvatar} />
-                <Text style={styles.memberName}>{item.name}</Text>
+                <Image
+                  source={{ uri: item.avatar || d_assets.images.appLogo }}
+                  style={styles.memberAvatar}
+                  defaultSource={d_assets.images.appLogo}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.memberName}>
+                    {item.firstName || ""} {item.lastName || ""} {chatRoom?.admins?.includes(item.id) ? t("groupInfo.admin") : t("groupInfo.member")}
+                  </Text>
+                  {chatRoom?.blockedUsers?.includes(item.id) && (
+                    <Text style={{ fontSize: 12, color: "#FF6B6B" }}>{t("groupInfo.blocked")}</Text>
+                  )}
+                </View>
               </View>
             )}
           />
