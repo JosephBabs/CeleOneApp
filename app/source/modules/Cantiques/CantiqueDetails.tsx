@@ -33,6 +33,7 @@ export default function CantiqueDetails({ route, navigation }: any) {
           color: #333;
           font-size: 22px;
           line-height: 1.5;
+          overflox: scroll;
         }
         p { margin: 8px 0; line-height: 1.5; }
         h3 { color: #333; margin: 16px 0 8px 0; }
@@ -58,42 +59,30 @@ export default function CantiqueDetails({ route, navigation }: any) {
     <View style={styles.container}>
       <View style={styless.header1}>
         <Image source={d_assets.images.appLogo} style={styless.logo} />
-        <Text style={styles.headerTitle}>{cantique.title}</Text>
+        <Text style={styles.headerTitle}>{cantique.hymnNumber}</Text>
         <View style={styless.headerIcons}>
-          <TouchableOpacity onPress={() => navigation.navigate("Notifications")}>
-            <Icon name="notifications-outline" size={24} color="#444" style={styless.iconRight} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
-            <Icon name="settings-outline" size={24} color="#444" />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <View style={styles.hymnCard}>
-          <View style={styles.hymnHeader}>
-            <View>
-              <Text style={styles.hymnTitle}>{cantique.title}</Text>
-              <Text style={styles.hymnSubtitle}>Hymn #{cantique.hymnNumber} • Key: {cantique.musicalKey || "Not specified"}</Text>
-            </View>
-            <TouchableOpacity onPress={handlePlay}>
+          <TouchableOpacity onPress={handlePlay}>
               <Icon
                 name={playing ? "pause-circle" : "play-circle"}
                 size={40}
                 color={COLORS.light.primary}
               />
             </TouchableOpacity>
-          </View>
+        </View>
+      </View>
+      
+        <View style={{ flex: 1, marginBottom: 20, paddingHorizontal: 20 }}>
           <WebView
             source={{ html: htmlContent }}
             style={styles.webView}
             originWhitelist={['*']}
-            scalesPageToFit={true}
+            scalesPageToFit={false}
+            scrollEnabled={true}
             javaScriptEnabled={true}
             
             domStorageEnabled={true}
           />
         </View>
-      </ScrollView>
     </View>
   );
 }
@@ -103,15 +92,16 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: "center",
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "bold",
     color: COLORS.light.primary,
   },
   hymnCard: {
     backgroundColor: "#fff",
     elevation: 0.4,
+    // flex:1,
     padding: 16,
-    marginVertical: 8,
+    // marginVertical: 8,
     marginHorizontal: 20,
     borderRadius: 8,
   },
@@ -119,10 +109,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    padding: 8,
+    // marginBottom: 16,
   },
   hymnTitle: {
-    fontSize: 24,
+    fontSize: 10,
     fontWeight: "bold",
     color: "#333",
   },
@@ -134,9 +125,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     lineHeight: 24,
+    flex: 1,
   },
   webView: {
-    height: 400,
+    height: 620,
+    overflow: 'scroll',
+    flex: 1,
     width: '100%',
+    paddingHorizontal: 20,
   },
 });

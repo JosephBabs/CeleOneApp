@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "275960060318",
+    "firebase_url": "https://celeone-e5843-default-rtdb.firebaseio.com",
+    "project_id": "celeone-e5843",
+    "storage_bucket": "celeone-e5843.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:275960060318:android:06d20193cd30da02eade8f",
+        "android_client_info": {
+          "package_name": "com.celeoneapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "275960060318-t160nsbie7s4oinm9ok7efpp050iifq1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBB199vcZiYmvFhuVw-uknHtV7FrBsovbs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "275960060318-t160nsbie7s4oinm9ok7efpp050iifq1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

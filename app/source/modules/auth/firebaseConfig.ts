@@ -12,7 +12,7 @@ import { getStorage } from "firebase/storage";
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBC3MTssV5lPRkkuf2Sct_UtGjWX1PfYzk",
-  authDomain: "celeone-e5843.firebaseapp.com",
+  authDomain: "celeone-e5843.firebaseapp.com", 
   projectId: "celeone-e5843",
   storageBucket: "celeone-e5843.firebasestorage.app",
   messagingSenderId: "275960060318",

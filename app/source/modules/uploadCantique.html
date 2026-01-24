@@ -1,0 +1,294 @@
+<!-- <!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>CeleOne – Import Cantiques</title>
+</head>
+
+<style>
+
+    body {
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+}
+
+.container {
+  width: 90%;
+  max-width: 700px;
+  margin: 40px auto;
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+h1 {
+  margin-bottom: 15px;
+}
+
+label {
+  font-weight: bold;
+  margin-top: 15px;
+  display: block;
+}
+
+input, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+}
+
+textarea {
+  height: 300px;
+}
+
+button {
+  margin-top: 20px;
+  padding: 12px;
+  width: 100%;
+  background: #1e88e5;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1565c0;
+}
+
+#status {
+  margin-top: 15px;
+  font-weight: bold;
+}
+
+</style>
+
+<body>
+<div class="container">
+  <h2>Importer des Cantiques</h2>
+
+  <label>Langue</label>
+  <input id="language" value="goun" />
+
+  <label>Texte</label>
+  <textarea id="rawText"></textarea>
+
+  <button onclick="importCantiques()">Importer</button>
+  <p id="status"></p>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBC3MTssV5lPRkkuf2Sct_UtGjWX1PfYzk",
+  authDomain: "celeone-e5843.firebaseapp.com",
+  projectId: "celeone-e5843",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+async function importCantiques() {
+  const rawText = document.getElementById("rawText").value;
+  const language = document.getElementById("language").value || "goun";
+  const status = document.getElementById("status");
+
+  const lines = rawText
+    .split("\n")
+    .map(l => l.replace(/\s+/g, " ").trim())
+    .filter(l => l.length > 0);
+
+  let current = null;
+  let cantiques = [];
+
+  for (let line of lines) {
+    // Nouvelle entrée uniquement si ligne = numéro exact du cantique
+    if (/^\d+\.$/.test(line)) {
+      if (current) cantiques.push(current);
+
+      current = {
+        hymnNumber: line.replace(".", ""),
+        title: "",
+        content: []
+      };
+      continue;
+    }
+
+    if (!current) continue;
+
+    // Première ligne = titre ET contenu
+    if (!current.title) {
+      current.title = line;
+      current.content.push(`<p>${line}</p>`);
+    } else {
+      // Si la ligne contient (Nisẹ), on la met à part
+      if (/\(Nisẹ\)/.test(line) || /Bẹji:/.test(line)) {
+        current.content.push(`<br><p>${line}</p>`);
+      } else {
+        // sinon, ajouter chaque ligne comme un couplet
+        current.content.push(`<p>${line}</p>`);
+      }
+    }
+  }
+
+  if (current) cantiques.push(current);
+
+  let count = 0;
+
+  for (const c of cantiques) {
+    await addDoc(collection(db, "cantiques"), {
+      language,
+      title: c.title,
+      hymnNumber: c.hymnNumber,
+      hymnContent: c.content.join("\n"), // HTML avec <p> pour chaque ligne
+      musicalKey: "",
+      createdAt: serverTimestamp(),
+    });
+    count++;
+  }
+
+  status.textContent = `${count} cantiques importés avec succès ✅`;
+}
+
+window.importCantiques = importCantiques;
+</script>
+</body>
+
+
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>CeleOne – Import Cantiques</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+    }
+    .container {
+      width: 90%;
+      max-width: 700px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    h2 { margin-bottom: 15px; }
+    label { font-weight: bold; margin-top: 15px; display: block; }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+    }
+    textarea { height: 300px; }
+    button {
+      margin-top: 20px;
+      padding: 12px;
+      width: 100%;
+      background: #1e88e5;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background: #1565c0; }
+    #status { margin-top: 15px; font-weight: bold; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>Importer des Cantiques</h2>
+
+  <label>Langue</label>
+  <input id="language" value="francais" />
+
+  <label>Texte</label>
+  <textarea id="rawText"></textarea>
+
+  <button onclick="importCantiques()">Importer</button>
+  <p id="status"></p>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBC3MTssV5lPRkkuf2Sct_UtGjWX1PfYzk",
+  authDomain: "celeone-e5843.firebaseapp.com",
+  projectId: "celeone-e5843",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+async function importCantiques() {
+  const rawText = document.getElementById("rawText").value;
+  const language = document.getElementById("language").value || "francais";
+  const status = document.getElementById("status");
+
+  if (!rawText.trim()) {
+    status.textContent = "Aucun texte fourni.";
+    return;
+  }
+
+  // Nettoyage des lignes
+  const lines = rawText
+    .split("\n")
+    .map(l => l.replace(/\s+/g, " ").trim())
+    .filter(l => l.length > 0);
+
+  let current = null;
+  let cantiques = [];
+
+  for (let line of lines) {
+    // Nouveau cantique = "numéro – « titre »"
+    const cantiqueMatch = line.match(/^(\d+)\s*–\s*«([^»]+)»/);
+    if (cantiqueMatch) {
+      if (current) cantiques.push(current);
+
+      current = {
+        hymnNumber: cantiqueMatch[1],
+        title: cantiqueMatch[2].trim(),
+        content: [] // lignes HTML
+      };
+      continue;
+    }
+
+    if (!current) continue;
+
+    // Chaque ligne devient un <p>, ajouter <br> si couplet numéroté
+    if (/^\d+\s*[-.]/.test(line)) {
+      current.content.push("<br>"); // espace avant couplet
+      current.content.push(`<p>${line}</p>`);
+    } else {
+      current.content.push(`<p>${line}</p>`);
+    }
+  }
+
+  if (current) cantiques.push(current);
+
+  let count = 0;
+
+  for (const c of cantiques) {
+    await addDoc(collection(db, "cantiques"), {
+      language,
+      title: c.title,
+      hymnNumber: c.hymnNumber,
+      hymnContent: c.content.join("\n"), // HTML pour WebView
+      musicalKey: "",
+      createdAt: serverTimestamp(),
+    });
+    count++;
+  }
+
+  status.textContent = `${count} cantiques importés avec succès ✅`;
+}
+
+window.importCantiques = importCantiques;
+</script>
+</body>
+</html>

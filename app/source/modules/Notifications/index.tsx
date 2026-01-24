@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,46 +8,104 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+
+import firestore from "@react-native-firebase/firestore";
+import auth from "@react-native-firebase/auth";
 
 import { COLORS } from "../../../core/theme/colors";
 
 export default function Notifications() {
   const { t } = useTranslation();
+  const navigation = useNavigation<any>();
 
-  // Example notifications data
-  const [notifications, setNotifications] = useState([
-    {
-      id: "1",
-      title: t("notifications.newMessage"),
-      description: t("notifications.newMessageDesc"),
-      icon: "chatbubble-outline",
-      time: "2h ago",
-    },
-    {
-      id: "2",
-      title: t("notifications.updateAvailable"),
-      description: t("notifications.updateAvailableDesc"),
-      icon: "cloud-download-outline",
-      time: "5h ago",
-    },
-    {
-      id: "3",
-      title: t("notifications.systemAlert"),
-      description: t("notifications.systemAlertDesc"),
-      icon: "alert-circle-outline",
-      time: "1d ago",
-    },
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    const unsubscribe = firestore()
+      .collection("users")
+      .doc(uid)
+      .collection("notifications")
+      .orderBy("createdAt", "desc")
+      .onSnapshot(snapshot => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setNotifications(data);
+      });
+
+    return unsubscribe;
+  }, []);
+
+  const clearAll = async () => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    const snap = await firestore()
+      .collection("users")
+      .doc(uid)
+      .collection("notifications")
+      .get();
+
+    const batch = firestore().batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  };
+
+  const handlePress = async (item: any) => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    // Mark as read
+    await firestore()
+      .collection("users")
+      .doc(uid)
+      .collection("notifications")
+      .doc(item.id)
+      .set({ read: true }, { merge: true });
+
+    // Navigate based on notification type
+    if (item.data?.type === "chat") {
+      navigation.navigate("ChatRoom", { roomId: item.data.roomId });
+    }
+
+    if (item.data?.type === "post") {
+      navigation.navigate("PostDetail", { postId: item.data.postId });
+    }
+
+    if (item.data?.type === "comment") {
+      navigation.navigate("PostDetail", { postId: item.data.postId });
+    }
+  };
 
   const renderItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => handlePress(item)}>
       <View style={styles.iconContainer}>
-        <Icon name={item.icon} size={24} color={COLORS.light.primary} />
+        <Icon
+          name={
+            item.data?.type === "chat"
+              ? "chatbubble-outline"
+              : item.data?.type === "comment"
+              ? "chatbox-ellipses-outline"
+              : "notifications-outline"
+          }
+          size={24}
+          color={COLORS.light.primary}
+        />
       </View>
+
       <View style={styles.textContainer}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.description}>{item.description}</Text>
-        <Text style={styles.time}>{item.time}</Text>
+        <Text style={styles.time}>
+          {item.createdAt?.toDate
+            ? item.createdAt.toDate().toLocaleString()
+            : ""}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -56,9 +114,8 @@ export default function Notifications() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        
         <Text style={styles.headerTitle}>{t("notifications.title")}</Text>
-        <TouchableOpacity onPress={() => setNotifications([])}>
+        <TouchableOpacity onPress={clearAll}>
           <Text style={styles.clearText}>{t("notifications.clearAll")}</Text>
         </TouchableOpacity>
       </View>
@@ -73,8 +130,14 @@ export default function Notifications() {
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Icon name="notifications-off-outline" size={40} color={COLORS.light.primary} />
-          <Text style={styles.emptyText}>{t("notifications.noNotifications")}</Text>
+          <Icon
+            name="notifications-off-outline"
+            size={40}
+            color={COLORS.light.primary}
+          />
+          <Text style={styles.emptyText}>
+            {t("notifications.noNotifications")}
+          </Text>
         </View>
       )}
     </View>
@@ -106,14 +169,9 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     backgroundColor: "#fff",
-    // borderRadius: 10,
     padding: 12,
     marginBottom: 1,
     alignItems: "center",
-    // shadowColor: "#000",
-    // shadowOpacity: 0.05,
-    // shadowOffset: { width: 0, height: 2 },
-    // shadowRadius: 5,
     elevation: 0.5,
   },
   iconContainer: {

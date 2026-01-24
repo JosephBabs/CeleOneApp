@@ -1,15 +1,8 @@
-# TODO: Handle First Time Launch and Onboarding
+# TODO: Add Language Filter and Search to AdminCantiques
 
-## Completed Tasks
-- [x] Remove premature setting of "hasLaunched" flag in navigation.tsx checkAppState
-- [x] Remove onboarding handling from SplashScreen.tsx, keep only auth logic
-- [x] Add setting "hasLaunched" to "true" in OnboardingScreen.tsx when completed or skipped
-- [x] Implement resetOnboarding function in navigation.tsx for redesign purposes
-- [x] Add language selection button in top left corner of onboarding screen with modal
-
-## Summary
-- Navigation now correctly detects first launch and shows onboarding only once.
-- SplashScreen focuses solely on authentication checks.
-- Onboarding completion properly sets the launch flag to prevent future shows.
-- Added resetOnboarding function for development/testing.
-- Users can change language during onboarding if initially selected wrongly.
+- [x] Add new state variables: selectedLanguage, searchQuery, filteredCantiques, showLanguageFilter
+- [x] Add useEffect to filter cantiques based on selectedLanguage and searchQuery
+- [x] Add UI for filter and search row after the title
+- [x] Add new Modal for language filter with 'All' option
+- [x] Update FlatList to use filteredCantiques
+- [x] Add styles for filter row, search input, and modal

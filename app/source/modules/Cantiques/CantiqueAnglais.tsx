@@ -7,15 +7,25 @@ import { d_assets } from "../../configs/assets";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../auth/firebaseConfig";
 
+interface Cantique {
+  id: string;
+  title: string;
+  hymnNumber: number;
+  musicalKey?: string;
+  hymnContent: string;
+  language: string;
+  createdAt: any;
+}
+
 interface Group {
   start: number;
   end: number;
-  hymns: any[];
+  hymns: Cantique[];
 }
 
 export default function CantiqueAnglais({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [cantiques, setCantiques] = useState<any[]>([]);
+  const [cantiques, setCantiques] = useState<Cantique[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [groupStates, setGroupStates] = useState<boolean[]>([]);
@@ -28,9 +38,8 @@ export default function CantiqueAnglais({ navigation }: any) {
     try {
       const q = query(collection(db, "cantiques"), where("language", "==", "anglais"));
       const querySnapshot = await getDocs(q);
-      const cantiquesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const cantiquesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cantique)).sort((a, b) => a.hymnNumber - b.hymnNumber);
       setCantiques(cantiquesData);
-      setGroupStates(new Array(Math.ceil(cantiquesData.length / 42)).fill(false));
     } catch (error) {
       console.error("Error fetching cantiques:", error);
     } finally {
@@ -50,11 +59,31 @@ export default function CantiqueAnglais({ navigation }: any) {
 
   const groups: Group[] = useMemo(() => {
     const groupsArray: Group[] = [];
-    for (let i = 0; i < Math.ceil(filteredCantiques.length / 42); i++) {
-      const start = i * 42 + 1;
-      const end = Math.min((i + 1) * 42, filteredCantiques.length);
-      const hymns = filteredCantiques.slice(i * 42, end);
-      groupsArray.push({ start, end, hymns });
+    const groupSize = 42;
+    let currentGroupStart = 1;
+    let currentGroupHymns: Cantique[] = [];
+
+    for (const cantique of filteredCantiques) {
+      if (cantique.hymnNumber >= currentGroupStart && cantique.hymnNumber < currentGroupStart + groupSize) {
+        currentGroupHymns.push(cantique);
+      } else {
+        if (currentGroupHymns.length > 0) {
+          groupsArray.push({
+            start: currentGroupStart,
+            end: currentGroupStart + groupSize - 1,
+            hymns: currentGroupHymns
+          });
+        }
+        currentGroupStart = Math.floor((cantique.hymnNumber - 1) / groupSize) * groupSize + 1;
+        currentGroupHymns = [cantique];
+      }
+    }
+    if (currentGroupHymns.length > 0) {
+      groupsArray.push({
+        start: currentGroupStart,
+        end: currentGroupStart + groupSize - 1,
+        hymns: currentGroupHymns
+      });
     }
     return groupsArray;
   }, [filteredCantiques]);
@@ -78,7 +107,7 @@ export default function CantiqueAnglais({ navigation }: any) {
     <TouchableOpacity style={styles.cantiqueCard} onPress={() => handleHymnPress(item)}>
       <View style={styles.cantiqueHeader}>
         <Text style={styles.cantiqueTitle}>{item.title}</Text>
-        <Text style={styles.cantiqueNumber}>#{item.hymnNumber}</Text>
+        <Text style={styles.cantiqueNumber}>{item.hymnNumber}</Text>
       </View>
       <Text style={styles.cantiqueKey}>Key: {item.musicalKey || "Not specified"}</Text>
     </TouchableOpacity>
@@ -268,9 +297,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cantiqueNumber: {
-    fontSize: 16,
+    fontSize: 24,
     color: COLORS.light.primary,
     fontWeight: "600",
+    paddingLeft: 10,
   },
   cantiqueKey: {
     fontSize: 14,
