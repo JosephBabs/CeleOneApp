@@ -49,6 +49,7 @@ const ANDROID_COLORS = {
     card: 'rgb(255, 255, 255)',
     destructive: 'rgb(186, 26, 26)',
     primary: '#2FA5A9',
+    // primary: '#151616',
   },
   dark: {
     grey6: 'rgb(16, 19, 27)',

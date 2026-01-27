@@ -269,11 +269,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 70, // Adjust this value to move the empty state up or down
     paddingVertical: 50,
   },
   emptyText: {
     fontSize: 16,
-    color: "#666",
+    color: COLORS.light.primary,
     textAlign: "center",
     marginTop: 20,
   },

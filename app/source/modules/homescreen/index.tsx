@@ -6,6 +6,7 @@ import {
   TextInput,
   FlatList,
   ScrollView,
+  RefreshControl,
   Alert,
   // StyleSheet,
 } from 'react-native';
@@ -43,11 +44,16 @@ const Home = ({ navigation }: any) => {
   // const isDark = false; // Replace with actual theme logic
   const [activeTab, setActiveTab] = useState('news');
   const [posts, setPosts] = useState<any[]>([]);
-  const [commentCounts, setCommentCounts] = useState<{ [key: string]: number }>({});
+  const [commentCounts, setCommentCounts] = useState<{ [key: string]: number }>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // Add this to your existing state declarations
+  const [refreshing, setRefreshing] = useState(false);
+
   // const [sound, setSound] = useState<Audio.Sound | null>(null);
   const isAdmin = auth.currentUser?.email === 'bajos3d@gmail.com';
 
@@ -65,6 +71,27 @@ const Home = ({ navigation }: any) => {
         return 'calendar-outline';
       default:
         return 'document-outline';
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    // Fetch posts again
+    try {
+      const postsQuery = query(collection(db, 'posts'));
+      const querySnapshot = await getDocs(postsQuery);
+      const postsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setPosts(postsData);
+      await fetchCommentCounts(postsData);
+    } catch (error) {
+      console.error('Error refreshing posts:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -90,14 +117,23 @@ const Home = ({ navigation }: any) => {
 
     for (const post of posts) {
       try {
-        const commentsQuery = query(collection(db, 'posts', post.id, 'comments'));
+        const commentsQuery = query(
+          collection(db, 'posts', post.id, 'comments'),
+        );
         const commentsSnapshot = await getDocs(commentsQuery);
 
         let total = 0;
         for (const commentDoc of commentsSnapshot.docs) {
           total += 1; // the comment itself
           const repliesQuery = query(
-            collection(db, 'posts', post.id, 'comments', commentDoc.id, 'replies')
+            collection(
+              db,
+              'posts',
+              post.id,
+              'comments',
+              commentDoc.id,
+              'replies',
+            ),
           );
           const repliesSnapshot = await getDocs(repliesQuery);
           total += repliesSnapshot.size;
@@ -167,7 +203,7 @@ const Home = ({ navigation }: any) => {
 
   const renderPostImages = (images: any[]) => {
     if (!images || images.length === 0) return null;
-    
+
     if (images.length === 1) {
       return <Image source={images[0]} style={styles.singleImage} />;
     }
@@ -203,7 +239,7 @@ const Home = ({ navigation }: any) => {
         >
           <Image
             source={post.image || d_assets.images.postImg1}
-            style={styles.singleImage} 
+            style={styles.singleImage}
           />
 
           <View
@@ -250,7 +286,7 @@ const Home = ({ navigation }: any) => {
         return renderPostImages(post.image);
       }
     }
-    
+
     return null;
   };
 
@@ -270,7 +306,6 @@ const Home = ({ navigation }: any) => {
       >
         {renderPostMedia(post)}
       </TouchableOpacity>
-
 
       <Text style={styles.postText} numberOfLines={3}>
         {post.text || post.content}
@@ -318,19 +353,21 @@ const Home = ({ navigation }: any) => {
 
   // Render announcement post (different style)
   const renderAnnouncementPost = (post: any) => (
-    <View style={[styles.postCard, { backgroundColor: "#e7f3ff" }]}>
+    <View style={[styles.postCard, { backgroundColor: '#e7f3ff' }]}>
       <Text style={[styles.titleSimple, { marginBottom: 6 }]}>
         {post.title}
       </Text>
-      <Text style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>
+      <Text style={{ color: '#666', fontSize: 12, marginBottom: 6 }}>
         {post.date}
       </Text>
       {renderPostMedia(post)}
       <Text style={{ marginVertical: 10 }} numberOfLines={3}>
         {post.content}
       </Text>
-      <TouchableOpacity onPress={() => navigation.navigate("PostDetail", { post })}>
-        <Text style={styles.seeMore}>{t("home.seeMore")}</Text>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('PostDetail', { post })}
+      >
+        <Text style={styles.seeMore}>{t('home.seeMore')}</Text>
       </TouchableOpacity>
       {post.audio && renderPostMedia(post)}
     </View>
@@ -515,8 +552,8 @@ const Home = ({ navigation }: any) => {
         </Text>
         {renderPostMedia(post)}
         <Text style={{ marginVertical: 10 }} numberOfLines={3}>
-        {post.description}
-      </Text>
+          {post.description}
+        </Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('PostDetail', { post })}
         >
@@ -570,8 +607,11 @@ const Home = ({ navigation }: any) => {
           post.eventName,
           post.description,
           post.author,
-          post.updatedBy
-        ].filter(Boolean).join(' ').toLowerCase();
+          post.updatedBy,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
 
         return searchableText.includes(searchLower);
       });
@@ -590,9 +630,7 @@ const Home = ({ navigation }: any) => {
   // Handle tag selection
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag],
     );
   };
 
@@ -653,6 +691,8 @@ const Home = ({ navigation }: any) => {
     }
   };
 
+  
+
   return (
     <View style={styles.page}>
       {/* Header */}
@@ -699,7 +739,10 @@ const Home = ({ navigation }: any) => {
           onBlur={handleSearchBlur}
         />
         {(searchText.length > 0 || selectedTags.length > 0) && (
-          <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+          <TouchableOpacity
+            onPress={clearSearch}
+            style={styles.clearSearchButton}
+          >
             <Icon name="close" size={20} color="#888" />
           </TouchableOpacity>
         )}
@@ -711,7 +754,10 @@ const Home = ({ navigation }: any) => {
           {selectedTags.map(tag => (
             <View key={tag} style={styles.tagBadge}>
               <Text style={styles.tagBadgeText}>{tag}</Text>
-              <TouchableOpacity onPress={() => removeTag(tag)} style={styles.tagBadgeRemove}>
+              <TouchableOpacity
+                onPress={() => removeTag(tag)}
+                style={styles.tagBadgeRemove}
+              >
                 <Icon name="close" size={14} color={COLORS.light.primary} />
               </TouchableOpacity>
             </View>
@@ -739,7 +785,8 @@ const Home = ({ navigation }: any) => {
                 <Text
                   style={[
                     styles.tagButtonText,
-                    selectedTags.includes(category) && styles.tagButtonTextSelected,
+                    selectedTags.includes(category) &&
+                      styles.tagButtonTextSelected,
                   ]}
                 >
                   {category}
@@ -751,7 +798,6 @@ const Home = ({ navigation }: any) => {
         </View>
       )}
 
-      
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <ScrollView
@@ -794,9 +840,21 @@ const Home = ({ navigation }: any) => {
         keyExtractor={item => item.id}
         contentContainerStyle={{ padding: 10, paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#008080']} // Match your app's primary color
+            tintColor="#008080"
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Icon name={getEmptyIcon(activeTab)} size={80} color="#ccc" />
+            <Icon
+              name={getEmptyIcon(activeTab)}
+              size={80}
+              color={COLORS.light.primary}
+            />
             <Text style={styles.emptyText}>{getEmptyText(activeTab)}</Text>
           </View>
         }

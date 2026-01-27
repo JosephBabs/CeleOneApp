@@ -1,35 +1,39 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Alert,
-  TextInput,
   Modal,
-  Image,
-  Platform,
-  KeyboardAvoidingView,
+  TextInput,
+  Alert,
   ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { COLORS } from '../../../core/theme/colors';
+import { auth, db } from '../auth/firebaseConfig';
 import {
   collection,
   getDocs,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   getDoc,
   serverTimestamp,
-  updateDoc,
 } from 'firebase/firestore';
-import { auth, db } from '../auth/firebaseConfig';
-import { COLORS } from '../../../core/theme/colors';
 import { RichEditor, RichToolbar } from 'react-native-pell-rich-editor';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+/* ================= MAIN ================= */
 export default function AdminPosts({ navigation }: any) {
+  const [loading, setLoading] = useState(true);
+
+  const [mode, setMode] = useState<'create' | 'edit' | 'manage' | null>(null);
+
   const [posts, setPosts] = useState<any[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -62,6 +66,7 @@ export default function AdminPosts({ navigation }: any) {
   const fetchPosts = async () => {
     const snap = await getDocs(collection(db, 'posts'));
     setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setLoading(false);
   };
 
   const fetchAdminName = async () => {
@@ -75,6 +80,7 @@ export default function AdminPosts({ navigation }: any) {
   };
 
   const resetForm = () => {
+    setMode(null);
     setNewPost({
       category: 'news',
       title: '',
@@ -150,6 +156,7 @@ export default function AdminPosts({ navigation }: any) {
   };
 
   const handleEditPost = (post: any) => {
+    setMode('edit');
     setEditingPost(post);
     setNewPost({
       category: post.category || 'news',
@@ -199,475 +206,455 @@ export default function AdminPosts({ navigation }: any) {
     setEditingPost(null);
     fetchPosts();
   };
-
+  /* ================= CARD ================= */
   const renderPost = ({ item }: any) => (
-    <View style={styles.postCard}>
-      <View style={styles.postHeader}>
-        <View>
-          <Text style={styles.postCategory}>{item.category.toUpperCase()}</Text>
-          <Text style={styles.postAuthor}>
-            {item.posterName || item.author || 'Admin'}
-          </Text>
-        </View>
-        <Text style={styles.postDate}>
-          {item.createdAt?.toDate?.().toLocaleDateString() || ''}
+    <TouchableOpacity
+      style={styles.card}
+      // onPress={() => handleEditPost(item)}
+      activeOpacity={0.9}
+    >
+      <View style={styles.iconBox}>
+        <Icon name="document-text-outline"color={COLORS.light.primary} size={35} />
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Text style={styles.name} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Text style={styles.desc} numberOfLines={1}>
+          {item.content || item.summary || item.description}
+        </Text>
+        <Text style={styles.desc} numberOfLines={2}>
+          {item.posterName || item.author || 'Admin'} - {item.category}
         </Text>
       </View>
 
-      <Text style={styles.postTitle}>{item.title}</Text>
-      <Text style={styles.postExcerpt} numberOfLines={2}>
-        {item.content || item.summary || item.description}
-      </Text>
-
-      <View style={styles.engagementRow}>
-        <View style={styles.engagementItem}>
-          <Icon name="heart-outline" size={16} color="#666" />
-          <Text style={styles.engagementText}>{item.likes || 0} likes</Text>
-        </View>
-        <View style={styles.engagementItem}>
-          <Icon name="chatbubble-outline" size={16} color="#666" />
-          <Text style={styles.engagementText}>
-            {item.comments || 0} comments
-          </Text>
-        </View>
-        <View style={styles.engagementItem}>
-          <Icon name="share-social-outline" size={16} color="#666" />
-          <Text style={styles.engagementText}>{item.shares || 0} shares</Text>
-        </View>
-      </View>
-
-      <View style={styles.buttonRow}>
+      <View style={styles.actions}>
         <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => handleEditPost(item)}
+          onPress={() => {
+            handleEditPost(item);
+          }}
         >
-          <Icon name="create" size={16} color="#fff" />
-          <Text style={styles.btnText}> Edit</Text>
+          <Icon name="pencil" size={18} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => handleDeletePost(item.id)}
-        >
-          <Icon name="trash" size={16} color="#fff" />
-          <Text style={styles.btnText}> Delete</Text>
+
+        <TouchableOpacity onPress={() => handleDeletePost(item.id)}>
+          <Icon name="trash" size={18} color="red" />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => navigation.goBack()}
-      >
-        <Icon name="arrow-back" size={22} color="#333" />
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
+    <View style={styles.container}>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="arrow-back" size={22} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Posts</Text>
+        <TouchableOpacity onPress={() => setMode('create')}>
+          <Icon name="add" size={26} />
+        </TouchableOpacity>
+      </View>
 
-      <Text style={styles.title}>Manage Posts</Text>
-
-      <TouchableOpacity
-        style={styles.createBtn}
-        onPress={() => setShowCreateForm(!showCreateForm)}
-      >
-        <Text style={styles.createText}>Create New Post</Text>
-      </TouchableOpacity>
-
-      {showCreateForm && (
-        <Modal
-          visible
-          animationType="slide"
-          style={{ flex: 1, padding: 16, backgroundColor: '#fff' }}
-          presentationStyle="overFullScreen"
-        >
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowCreateForm(false)}
-          >
-            <Ionicons name="close" size={20} color="#666" />
-            <Text style={styles.menuText}>Cancel</Text>
-          </TouchableOpacity>
-          <ScrollView>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-              <View style={styles.form}>
-                {/* CATEGORY */}
-                <TouchableOpacity
-                  style={styles.inputWithIcon}
-                  onPress={() => setShowCategoryPicker(true)}
-                >
-                  <Icon name="list" size={20} color="#666" />
-                  <Text style={styles.categoryText}>
-                    {newPost.category.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* NEWS */}
-                {newPost.category === 'news' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="News title"
-                      value={newPost.title}
-                      onChangeText={t => setNewPost({ ...newPost, title: t })}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Image URL (optional)"
-                      value={newPost.image}
-                      onChangeText={t => setNewPost({ ...newPost, image: t })}
-                    />
-                    <TextInput
-                      style={styles.textarea}
-                      placeholder="News content"
-                      multiline
-                      value={newPost.content}
-                      onChangeText={t => setNewPost({ ...newPost, content: t })}
-                    />
-                  </>
-                )}
-
-                {/* ANNOUNCEMENTS */}
-                {newPost.category === 'announcements' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Title"
-                      value={newPost.title}
-                      onChangeText={t => setNewPost({ ...newPost, title: t })}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Image URL (optional)"
-                      value={newPost.image}
-                      onChangeText={t => setNewPost({ ...newPost, image: t })}
-                    />
-                    <TextInput
-                      style={styles.textarea}
-                      placeholder="Announcement"
-                      multiline
-                      value={newPost.content}
-                      onChangeText={t => setNewPost({ ...newPost, content: t })}
-                    />
-                  </>
-                )}
-
-                {/* DECISIONS */}
-                {newPost.category === 'decisions' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Decision title"
-                      value={newPost.decisionTitle}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, decisionTitle: t })
-                      }
-                    />
-                    <Text style={styles.label}>
-                      Decision Content (HTML Editor)
-                    </Text>
-                    <RichToolbar
-                      editor={richText}
-                      actions={['bold', 'italic', 'image', 'link', 'fontSize']}
-                      iconMap={{ insertImage: 'image' }}
-                    />
-                    <RichEditor
-                      ref={richText}
-                      onChange={setRichEditorContent}
-                      placeholder="Enter decision content..."
-                      initialContentHTML={richEditorContent}
-                      style={styles.richEditor}
-                    />
-                  </>
-                )}
-
-                {/* REFORMS */}
-                {newPost.category === 'reforms' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Reform title"
-                      value={newPost.decisionTitle}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, decisionTitle: t })
-                      }
-                    />
-                    <Text style={styles.label}>
-                      Reform Content (HTML Editor)
-                    </Text>
-                    <RichToolbar
-                      editor={richText}
-                      actions={['bold', 'italic', 'image', 'link', 'fontSize']}
-                      iconMap={{ insertImage: 'image' }}
-                    />
-                    <RichEditor
-                      ref={richText}
-                      onChange={setRichEditorContent}
-                      placeholder="Enter reform content..."
-                      initialContentHTML={richEditorContent}
-                      style={styles.richEditor}
-                    />
-                  </>
-                )}
-
-                {/* EVENTS */}
-                {newPost.category === 'events' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Event name"
-                      value={newPost.eventName}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, eventName: t })
-                      }
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Image URL (optional)"
-                      value={newPost.image}
-                      onChangeText={t => setNewPost({ ...newPost, image: t })}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Location"
-                      value={newPost.eventLocation}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, eventLocation: t })
-                      }
-                    />
-                    <TextInput
-                      style={styles.textarea}
-                      placeholder="Description"
-                      multiline
-                      value={newPost.description}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, description: t })
-                      }
-                    />
-                  </>
-                )}
-
-                <TouchableOpacity
-                  style={styles.submitBtn}
-                  onPress={handleCreatePost}
-                >
-                  <Text style={styles.submitText}>Publish</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </ScrollView>
-        </Modal>
+      {/* LIST */}
+      {loading ? (
+        <ActivityIndicator />
+      ) : (
+        <FlatList
+          data={posts}
+          renderItem={renderPost}
+          keyExtractor={i => i.id}
+          contentContainerStyle={{ gap: 12 }}
+        />
       )}
 
-      {showEditForm && (
-        <Modal
-          visible
-          animationType="slide"
-          style={{ flex: 1, padding: 16, backgroundColor: '#fff' }}
-          presentationStyle="overFullScreen"
-        >
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowEditForm(false)}
-          >
-            <Ionicons name="close" size={20} color="#666" />
-            <Text style={styles.menuText}>Cancel</Text>
-          </TouchableOpacity>
-          <ScrollView>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-              <View style={styles.form}>
-                <Text style={styles.editTitle}>Edit Post</Text>
+      {/* MODAL */}
+      <Modal visible={!!mode} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* CREATE / EDIT */}
+              {showEditForm && (
+                <>
+                  <ScrollView>
+                    <KeyboardAvoidingView behavior="padding">
+                      <TouchableOpacity
+                        style={styles.card1}
+                        onPress={() => setShowCategoryPicker(true)}
+                      >
+                        <Icon name="list" size={20} color="#666" />
+                        <Text style={styles.name}>
+                          {newPost.category.toUpperCase()} - "click to select"
+                        </Text>
+                      </TouchableOpacity>
 
-                {/* CATEGORY */}
-                <TouchableOpacity
-                  style={styles.inputWithIcon}
-                  onPress={() => setShowCategoryPicker(true)}
-                >
-                  <Icon name="list" size={20} color="#666" />
-                  <Text style={styles.categoryText}>
-                    {newPost.category.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
+                      {/* NEWS */}
+                      {newPost.category === 'news' && (
+                        <>
+                          <Input
+                            placeholder="News title"
+                            value={newPost.title}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, title: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Image URL (optional)"
+                            value={newPost.image}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, image: t })
+                            }
+                          />
+                          <Input
+                            placeholder="News content"
+                            value={newPost.content}
+                            style={styles.textarea}
+                            multiline
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, content: t })
+                            }
+                          />
+                        </>
+                      )}
 
-                {/* NEWS */}
-                {newPost.category === 'news' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="News title"
-                      value={newPost.title}
-                      onChangeText={t => setNewPost({ ...newPost, title: t })}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Image URL (optional)"
-                      value={newPost.image}
-                      onChangeText={t => setNewPost({ ...newPost, image: t })}
-                    />
-                    <TextInput
-                      style={styles.textarea}
-                      placeholder="News content"
-                      multiline
-                      value={newPost.content}
-                      onChangeText={t => setNewPost({ ...newPost, content: t })}
-                    />
-                  </>
-                )}
+                      {/* NEWS */}
+                      {newPost.category === 'announcements' && (
+                        <>
+                          <Input
+                            placeholder="Title"
+                            value={newPost.title}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, title: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Image URL (optional)"
+                            value={newPost.image}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, image: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Announcement content"
+                            value={newPost.content}
+                            style={styles.textarea}
+                            multiline
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, content: t })
+                            }
+                          />
+                        </>
+                      )}
 
-                {/* ANNOUNCEMENTS */}
-                {newPost.category === 'announcements' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Title"
-                      value={newPost.title}
-                      onChangeText={t => setNewPost({ ...newPost, title: t })}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Image URL (optional)"
-                      value={newPost.image}
-                      onChangeText={t => setNewPost({ ...newPost, image: t })}
-                    />
-                    <TextInput
-                      style={styles.textarea}
-                      placeholder="Announcement"
-                      multiline
-                      value={newPost.content}
-                      onChangeText={t => setNewPost({ ...newPost, content: t })}
-                    />
-                  </>
-                )}
+                      {/* DECISIONS */}
+                      {newPost.category === 'decisions' && (
+                        <>
+                          <Input
+                            placeholder="Decision title"
+                            value={newPost.decisionTitle}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, decisionTitle: t })
+                            }
+                          />
+                          <Text style={styles.name}>
+                            Decision Content (HTML Editor)
+                          </Text>
+                          <RichToolbar
+                            editor={richText}
+                            actions={[
+                              'bold',
+                              'italic',
+                              'insertImage',
+                              'fontSize',
+                            ]}
+                            iconMap={{ insertImage: 'image' }}
+                          />
+                          <RichEditor
+                            ref={richText}
+                            onChange={setRichEditorContent}
+                            placeholder="Enter decision content..."
+                            initialContentHTML={richEditorContent}
+                            style={styles.richEditor}
+                          />
+                        </>
+                      )}
 
-                {/* DECISIONS */}
-                {newPost.category === 'decisions' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Decision title"
-                      value={newPost.decisionTitle}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, decisionTitle: t })
-                      }
-                    />
-                    <Text style={styles.label}>
-                      Decision Content (HTML Editor)
-                    </Text>
-                    <RichToolbar
-                      editor={richText}
-                      actions={['bold', 'italic', 'insertImage', 'fontSize']}
-                      iconMap={{ insertImage: 'image' }}
-                    />
-                    <RichEditor
-                      ref={richText}
-                      onChange={setRichEditorContent}
-                      placeholder="Enter decision content..."
-                      initialContentHTML={richEditorContent}
-                      style={styles.richEditor}
-                    />
-                  </>
-                )}
+                      {/* REFORMS */}
+                      {newPost.category === 'reforms' && (
+                        <>
+                          <Input
+                            placeholder="Reforms title"
+                            value={newPost.decisionTitle}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, decisionTitle: t })
+                            }
+                          />
+                          <Text style={styles.name}>
+                            Reforms Content (HTML Editor)
+                          </Text>
+                          <RichToolbar
+                            editor={richText}
+                            actions={[
+                              'bold',
+                              'italic',
+                              'insertImage',
+                              'fontSize',
+                            ]}
+                            iconMap={{ insertImage: 'image' }}
+                          />
+                          <RichEditor
+                            ref={richText}
+                            onChange={setRichEditorContent}
+                            placeholder="Enter decision content..."
+                            initialContentHTML={richEditorContent}
+                            style={styles.richEditor}
+                          />
+                        </>
+                      )}
 
-                {/* REFORMS */}
-                {newPost.category === 'reforms' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Reform title"
-                      value={newPost.decisionTitle}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, decisionTitle: t })
-                      }
-                    />
-                    <Text style={styles.label}>
-                      Reform Content (HTML Editor)
-                    </Text>
-                    <RichToolbar
-                      editor={richText}
-                      actions={['bold', 'italic', 'insertImage', 'fontSize']}
-                      iconMap={{ insertImage: 'image' }}
-                    />
-                    <RichEditor
-                      ref={richText}
-                      onChange={setRichEditorContent}
-                      placeholder="Enter reform content..."
-                      initialContentHTML={richEditorContent}
-                      style={styles.richEditor}
-                    />
-                  </>
-                )}
+                      {/* EVENTS */}
+                      {newPost.category === 'events' && (
+                        <>
+                          <Input
+                            placeholder="Event name"
+                            value={newPost.eventName}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, eventName: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Image URL (optional)"
+                            value={newPost.image}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, image: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Event location"
+                            value={newPost.eventLocation}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, eventLocation: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Description"
+                            value={newPost.description}
+                            style={styles.textarea}
+                            multiline
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, description: t })
+                            }
+                          />
+                        </>
+                      )}
 
-                {/* EVENTS */}
-                {newPost.category === 'events' && (
-                  <>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Event name"
-                      value={newPost.eventName}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, eventName: t })
-                      }
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Image URL (optional)"
-                      value={newPost.image}
-                      onChangeText={t => setNewPost({ ...newPost, image: t })}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Location"
-                      value={newPost.eventLocation}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, eventLocation: t })
-                      }
-                    />
-                    <TextInput
-                      style={styles.textarea}
-                      placeholder="Description"
-                      multiline
-                      value={newPost.description}
-                      onChangeText={t =>
-                        setNewPost({ ...newPost, description: t })
-                      }
-                    />
-                  </>
-                )}
+                      <PrimaryButton
+                        label="Update Post"
+                        onPress={handleUpdatePost}
+                      />
+                    </KeyboardAvoidingView>
 
-                <View style={styles.editButtons}>
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={() => {
-                      setShowEditForm(false);
-                      resetForm();
-                      setEditingPost(null);
-                    }}
-                  >
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.submitBtn}
-                    onPress={handleUpdatePost}
-                  >
-                    <Text style={styles.submitText}>Update</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </KeyboardAvoidingView>
-          </ScrollView>
-        </Modal>
-      )}
+                    <TouchableOpacity style={styles.close} onPress={resetForm}>
+                      <Text style={styles.closeText}>Close</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </>
+              )}
 
-      <FlatList
-        data={posts}
-        keyExtractor={i => i.id}
-        renderItem={renderPost}
-        scrollEnabled={false}
-      />
+              {/* MANAGE */}
+              {showCreateForm && (
+                <>
+                  <ScrollView>
+                    <KeyboardAvoidingView behavior="padding">
+                      <TouchableOpacity
+                        style={styles.card1}
+                        onPress={() => setShowCategoryPicker(true)}
+                      >
+                        <Icon name="list" size={20} color="#666" />
+                        <Text style={styles.name}>
+                          {newPost.category.toUpperCase()} - "click to select"
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* NEWS */}
+                      {newPost.category === 'news' && (
+                        <>
+                          <Input
+                            placeholder="News title"
+                            // value={newPost.title}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, title: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Image URL (optional)"
+                            // value={newPost.image}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, image: t })
+                            }
+                          />
+                          <Input
+                            placeholder="News content"
+                            // value={newPost.content}
+                            style={styles.textarea}
+                            multiline
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, content: t })
+                            }
+                          />
+                        </>
+                      )}
+
+                      {/* NEWS */}
+                      {newPost.category === 'announcements' && (
+                        <>
+                          <Input
+                            placeholder="Title"
+                            // value={newPost.title}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, title: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Image URL (optional)"
+                            // value={newPost.image}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, image: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Announcement content"
+                            // value={newPost.content}
+                            style={styles.textarea}
+                            multiline
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, content: t })
+                            }
+                          />
+                        </>
+                      )}
+
+                      {/* DECISIONS */}
+                      {newPost.category === 'decisions' && (
+                        <>
+                          <Input
+                            placeholder="Decision title"
+                            // value={newPost.decisionTitle}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, decisionTitle: t })
+                            }
+                          />
+                          <Text style={styles.name}>
+                            Decision Content (HTML Editor)
+                          </Text>
+                          <RichToolbar
+                            editor={richText}
+                            actions={[
+                              'bold',
+                              'italic',
+                              'image',
+                              'fontSize',
+                            ]}
+                            iconMap={{ insertImage: 'image' }}
+                          />
+                          <RichEditor
+                            ref={richText}
+                            onChange={setRichEditorContent}
+                            placeholder="Enter decision content..."
+                            initialContentHTML={richEditorContent}
+                            style={styles.richEditor}
+                          />
+                        </>
+                      )}
+
+                      {/* REFORMS */}
+                      {newPost.category === 'reforms' && (
+                        <>
+                          <Input
+                            placeholder="Reforms title"
+                            // value={newPost.decisionTitle}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, decisionTitle: t })
+                            }
+                          />
+                          <Text style={styles.name}>
+                            Reforms Content (HTML Editor)
+                          </Text>
+                          <RichToolbar
+                            editor={richText}
+                            actions={[
+                              'bold',
+                              'italic',
+                              'image',
+                              'link',
+                              'fontSize',
+                            ]}
+                            iconMap={{ insertImage: 'image' }}
+                          />
+                          <RichEditor
+                            ref={richText}
+                            onChange={setRichEditorContent}
+                            placeholder="Enter decision content..."
+                            initialContentHTML={richEditorContent}
+                            style={styles.richEditor}
+                          />
+                        </>
+                      )}
+
+                      {/* EVENTS */}
+                      {newPost.category === 'events' && (
+                        <>
+                          <Input
+                            placeholder="Event name"
+                            // value={newPost.eventName}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, eventName: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Image URL (optional)"
+                            // value={newPost.image}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, image: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Event location"
+                            // value={newPost.eventLocation}
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, eventLocation: t })
+                            }
+                          />
+                          <Input
+                            placeholder="Description"
+                            value={newPost.description}
+                            style={styles.textarea}
+                            multiline
+                            onChangeText={(t: any) =>
+                              setNewPost({ ...newPost, description: t })
+                            }
+                          />
+                        </>
+                      )}
+
+                      <PrimaryButton
+                        label="Publish"
+                        onPress={handleCreatePost}
+                      />
+                    </KeyboardAvoidingView>
+
+                    <TouchableOpacity style={styles.close} onPress={resetForm}>
+                      <Text style={styles.closeText}>Close</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* CATEGORY MODAL */}
       <Modal
@@ -698,146 +685,31 @@ export default function AdminPosts({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
+/* ================= UI PARTS ================= */
+const Input = (props: any) => <TextInput {...props} style={styles.input} />;
+
+const PrimaryButton = ({ label, onPress }: any) => (
+  <TouchableOpacity style={styles.primaryBtn} onPress={onPress}>
+    <Text style={styles.primaryText}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const Section = ({ title }: any) => <Text style={styles.section}>{title}</Text>;
+
 /* ================= STYLES ================= */
-
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  backText: { marginLeft: 8, color: COLORS.light.primary },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-  createBtn: {
-    backgroundColor: COLORS.light.primary,
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  createText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-  menuItem: {
+  container: { flex: 1, backgroundColor: '#f7f7f7', padding: 16 },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 12,
-    color: '#333',
-  },
-  form: { marginBottom: 20 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  textarea: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 6,
-    height: 100,
-    marginBottom: 10,
-  },
-  label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  richEditor: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    height: 200,
-    marginBottom: 10,
-  },
-
-  inputWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  categoryText: { marginLeft: 10, fontWeight: '600' },
-
-  submitBtn: { backgroundColor: 'green', padding: 14, borderRadius: 8 },
-  submitText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-
-  postCard: {
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: '#fafafa',
-    marginBottom: 12,
-  },
-  postHeader: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  postCategory: {
-    fontSize: 12,
-    color: COLORS.light.primary,
-    fontWeight: 'bold',
-  },
-  postAuthor: { fontSize: 12, color: '#888', marginTop: 2 },
-  postDate: { fontSize: 12, color: '#888' },
-  postTitle: { fontSize: 18, fontWeight: '600', marginBottom: 6 },
-  postExcerpt: { color: '#555', marginBottom: 10 },
-
-  engagementRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#eee',
-    marginBottom: 10,
-  },
-  engagementItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  engagementText: { fontSize: 12, color: '#666', marginLeft: 4 },
-
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 10,
-  },
-
-  editBtn: {
-    backgroundColor: '#007bff',
-    padding: 8,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  deleteBtn: { backgroundColor: '#dc3545', padding: 8, borderRadius: 6 },
-  btnText: { color: '#fff' },
-
-  editTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
     marginBottom: 16,
-    textAlign: 'center',
   },
-  editButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  cancelBtn: {
-    backgroundColor: '#6c757d',
-    padding: 14,
-    borderRadius: 8,
-    flex: 1,
-    marginRight: 10,
-  },
-  cancelText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-
-  modalOverlay: {
+   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
@@ -846,4 +718,96 @@ const styles = StyleSheet.create({
   modalItem: { padding: 16, borderBottomWidth: 1, borderColor: '#eee' },
   modalItemText: { textAlign: 'center', fontWeight: '600' },
   modalClose: { textAlign: 'center', padding: 16, color: 'red' },
+
+  title: { fontSize: 20, fontWeight: '600' },
+  richEditor: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    height: 200,
+    marginBottom: 10,
+  },
+  card: {
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconBox: {
+    width: 52,
+    height: 62,
+    borderRadius: 18,
+    backgroundColor: '#eee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  name: { fontSize: 15, fontWeight: '600' },
+  desc: { fontSize: 12, color: '#777' },
+  actions: { flexDirection: 'row', gap: 14 },
+  textarea: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 12,
+    borderRadius: 6,
+    height: 100,
+    marginBottom: 10,
+  },
+  card1: {
+    flex: 1,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modal: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+
+  input: {
+    backgroundColor: '#f3f3f3',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+  },
+
+  primaryBtn: {
+    backgroundColor: COLORS.light.primary,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  primaryText: { color: '#fff', fontWeight: '600' },
+
+  section: {
+    marginTop: 16,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  item: {
+    paddingVertical: 6,
+    fontSize: 13,
+    color: '#555',
+  },
+
+  close: { alignItems: 'center', marginTop: 16 },
+  closeText: { fontSize: 16, color: COLORS.light.primary },
 });

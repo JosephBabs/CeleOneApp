@@ -1,19 +1,21 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-} from "react-native";
-import Icon from "react-native-vector-icons/Ionicons";
-import { useTranslation } from "react-i18next";
-import { useNavigation } from "@react-navigation/native";
+  Image,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 
-import firestore from "@react-native-firebase/firestore";
-import auth from "@react-native-firebase/auth";
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
-import { COLORS } from "../../../core/theme/colors";
+import { COLORS } from '../../../core/theme/colors';
+import { d_assets } from '../../configs/assets';
 
 export default function Notifications() {
   const { t } = useTranslation();
@@ -26,10 +28,10 @@ export default function Notifications() {
     if (!uid) return;
 
     const unsubscribe = firestore()
-      .collection("users")
+      .collection('users')
       .doc(uid)
-      .collection("notifications")
-      .orderBy("createdAt", "desc")
+      .collection('notifications')
+      .orderBy('createdAt', 'desc')
       .onSnapshot(snapshot => {
         const data = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -46,9 +48,9 @@ export default function Notifications() {
     if (!uid) return;
 
     const snap = await firestore()
-      .collection("users")
+      .collection('users')
       .doc(uid)
-      .collection("notifications")
+      .collection('notifications')
       .get();
 
     const batch = firestore().batch();
@@ -62,23 +64,23 @@ export default function Notifications() {
 
     // Mark as read
     await firestore()
-      .collection("users")
+      .collection('users')
       .doc(uid)
-      .collection("notifications")
+      .collection('notifications')
       .doc(item.id)
       .set({ read: true }, { merge: true });
 
     // Navigate based on notification type
-    if (item.data?.type === "chat") {
-      navigation.navigate("ChatRoom", { roomId: item.data.roomId });
+    if (item.data?.type === 'chat') {
+      navigation.navigate('ChatRoom', { roomId: item.data.roomId });
     }
 
-    if (item.data?.type === "post") {
-      navigation.navigate("PostDetail", { postId: item.data.postId });
+    if (item.data?.type === 'post') {
+      navigation.navigate('PostDetail', { postId: item.data.postId });
     }
 
-    if (item.data?.type === "comment") {
-      navigation.navigate("PostDetail", { postId: item.data.postId });
+    if (item.data?.type === 'comment') {
+      navigation.navigate('PostDetail', { postId: item.data.postId });
     }
   };
 
@@ -87,11 +89,11 @@ export default function Notifications() {
       <View style={styles.iconContainer}>
         <Icon
           name={
-            item.data?.type === "chat"
-              ? "chatbubble-outline"
-              : item.data?.type === "comment"
-              ? "chatbox-ellipses-outline"
-              : "notifications-outline"
+            item.data?.type === 'chat'
+              ? 'chatbubble-outline'
+              : item.data?.type === 'comment'
+              ? 'chatbox-ellipses-outline'
+              : 'notifications-outline'
           }
           size={24}
           color={COLORS.light.primary}
@@ -104,7 +106,7 @@ export default function Notifications() {
         <Text style={styles.time}>
           {item.createdAt?.toDate
             ? item.createdAt.toDate().toLocaleString()
-            : ""}
+            : ''}
         </Text>
       </View>
     </TouchableOpacity>
@@ -112,19 +114,29 @@ export default function Notifications() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t("notifications.title")}</Text>
-        <TouchableOpacity onPress={clearAll}>
-          <Text style={styles.clearText}>{t("notifications.clearAll")}</Text>
-        </TouchableOpacity>
+      <View style={styles.header1}>
+        <Image source={d_assets.images.appLogo} style={styles.logo} />
+        {/* <Text style={styles.titleSimple2}>{t("home.explore")}</Text> */}
+        <Text style={styles.headerTitle}>{t('notifications.title')}</Text>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity onPress={clearAll}>
+            <Icon
+              name="trash-outline"
+              size={24}
+              color="#444"
+              style={styles.iconRight}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Header */}
 
       {/* Notifications List */}
       {notifications.length > 0 ? (
         <FlatList
           data={notifications}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 20 }}
         />
@@ -136,7 +148,7 @@ export default function Notifications() {
             color={COLORS.light.primary}
           />
           <Text style={styles.emptyText}>
-            {t("notifications.noNotifications")}
+            {t('notifications.noNotifications')}
           </Text>
         </View>
       )}
@@ -147,40 +159,64 @@ export default function Notifications() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f9f9",
-    padding: 16,
+    backgroundColor: '#f9f9f9',
+    // padding: 16,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
     marginBlockStart: 22,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+  },
+  header1: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    // marginBlockStart: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    // elevation: 1
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconRight: {
+    marginRight: 16,
+  },
+  logo: {
+    height: 40,
+    width: 50,
+    objectFit: 'contain',
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     color: COLORS.light.primary,
   },
   clearText: {
     fontSize: 14,
-    color: "#007BFF",
+    color: '#007BFF',
   },
   card: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
+    flexDirection: 'row',
+    backgroundColor: '#fff',
     padding: 12,
     marginBottom: 1,
-    alignItems: "center",
+    alignItems: 'center',
     elevation: 0.5,
   },
   iconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#E6F0FF",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#E6F0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   textContainer: {
@@ -188,22 +224,22 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+    fontWeight: 'bold',
+    color: '#333',
   },
   description: {
     fontSize: 14,
-    color: "#666",
+    color: '#666',
     marginVertical: 2,
   },
   time: {
     fontSize: 12,
-    color: "#999",
+    color: '#999',
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 50,
   },
   emptyText: {

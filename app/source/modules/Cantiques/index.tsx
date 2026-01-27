@@ -57,8 +57,8 @@ export default function Cantiques({ navigation }: any) {
             style={styles.card}
             onPress={() => handleOpenCantique(item.screen)}
           >
-            <View style={styles.iconContainer}>
-              <Icon name="musical-notes-outline" size={24} color={COLORS.light.primary} />
+            <View style={styles.iconBox}>
+              <Icon name="musical-notes-outline" size={35} color={COLORS.light.primary} />
             </View>
 
             <Text style={styles.cardText}>{item.label}</Text>
@@ -77,7 +77,7 @@ export default function Cantiques({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: '#f7f7f7' },
   title: {
     fontSize: 24,
     fontWeight: "bold",
@@ -88,13 +88,24 @@ const styles = StyleSheet.create({
     padding: 10,
     elevation:1,
   },
+  
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
     elevation: 0.4,
-    padding: 16,
-    marginVertical: 8,
-    flexDirection: "row",
-    alignItems: "center",
+    marginVertical: 2,
+    gap: 5,
+  },
+  iconBox: {
+    width: 52,
+    height: 62,
+    borderRadius: 10,
+    backgroundColor: '#eee',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconContainer: {
     width: 40,

@@ -409,14 +409,14 @@ export default function AdminCantiques({ navigation }: any) {
 
       {showEditForm && (
         <Modal
-          visible
+         visible
           animationType="slide"
           style={{ flex: 1, padding: 16, backgroundColor: '#fff' }}
           presentationStyle="overFullScreen"
         >
         <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => setShowCreateForm(false)}
+            onPress={() => setShowEditForm(false)}
           >
             <Ionicons name="close" size={20} color="#666" />
             <Text style={styles.menuText}>Cancel</Text>

@@ -1,62 +1,232 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from "react-native";
-import { auth } from "../auth/firebaseConfig";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+} from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { COLORS } from "../../../core/theme/colors";
+import { auth, db } from "../auth/firebaseConfig";
+import { collection, getDocs } from "firebase/firestore";
 
 export default function AdminDashboard({ navigation }: any) {
-  const handleLogout = () => {
-    auth.signOut();
-    navigation.replace("Login");
+  const [loading, setLoading] = useState(true);
+
+  const [counts, setCounts] = useState({
+    users: 0,
+    chatrooms: 0,
+    posts: 0,
+    pendingRequests: 0,
+    platformRequests: 0,
+    cantiques: 0,
+    tvChannels: 0,
+  });
+
+  /* ================= FETCH COUNTS ================= */
+  const fetchCounts = async () => {
+    try {
+      const [
+        usersSnap,
+        chatroomsSnap,
+        postsSnap,
+        pendingSnap,
+        platformSnap,
+        cantiquesSnap,
+        tvSnap,
+      ] = await Promise.all([
+        getDocs(collection(db, "user_data")),
+        getDocs(collection(db, "chatrooms")),
+        getDocs(collection(db, "posts")),
+        getDocs(collection(db, "joinRequests")),
+        getDocs(collection(db, "platformRequests")),
+        getDocs(collection(db, "cantiques")),
+        getDocs(collection(db, "channels")),
+      ]);
+
+      setCounts({
+        users: usersSnap.size,
+        chatrooms: chatroomsSnap.size,
+        posts: postsSnap.size,
+        pendingRequests: pendingSnap.size,
+        platformRequests: platformSnap.size,
+        cantiques: cantiquesSnap.size,
+        tvChannels: tvSnap.size,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard counts:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const menuItems = [
-    { id: "1", title: "Manage Posts", icon: "document-text", navigateTo: "AdminPosts", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
-    { id: "2", title: "Manage Chatrooms", icon: "chatbubbles", navigateTo: "AdminChatrooms", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
-    { id: "3", title: "View Users", icon: "people", navigateTo: "AdminUsers", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
-    { id: "4", title: "View Profiles", icon: "person", navigateTo: "AdminProfiles", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
-    { id: "5", title: "Pending Requests", icon: "checkmark-circle", navigateTo: "AdminPendingRequests", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
-    { id: "6", title: "Manage Cantiques", icon: "musical-notes", navigateTo: "AdminCantiques", bgColor: "#f6fdffff", borderColor: COLORS.light.primary },
+  useEffect(() => {
+    fetchCounts();
+  }, []);
+
+  /* ================= DASHBOARD CARDS ================= */
+  const stats = [
+    {
+      id: "1",
+      label: "Users",
+      value: counts.users,
+      icon: "people",
+      route: "AdminUsers",
+    },
+    {
+      id: "2",
+      label: "Chatrooms",
+      value: counts.chatrooms,
+      icon: "chatbubbles",
+      route: "AdminChatrooms",
+    },
+    {
+      id: "3",
+      label: "Posts",
+      value: counts.posts,
+      icon: "document-text",
+      route: "AdminPosts",
+    },
+    {
+      id: "4",
+      label: "Pending Requests",
+      value: counts.pendingRequests,
+      icon: "time",
+      route: "AdminPendingRequests",
+    },
+    {
+      id: "5",
+      label: "Platform Requests",
+      value: counts.platformRequests,
+      icon: "layers",
+      route: "AdminPlatformRequests",
+    },
+    {
+      id: "6",
+      label: "Cantiques",
+      value: counts.cantiques,
+      icon: "musical-notes",
+      route: "AdminCantiques",
+    },
+    {
+      id: "7",
+      label: "TV Channels",
+      value: counts.tvChannels,
+      icon: "tv",
+      route: "AdminTVChannels",
+    },
   ];
 
-  const renderMenuItem = ({ item }: any) => (
-    <TouchableOpacity style={[styles.card, { backgroundColor: item.bgColor, borderColor: item.borderColor, borderWidth: 2 }]} onPress={() => navigation.navigate(item.navigateTo)}>
-      <Icon name={item.icon} size={35} color={COLORS.light.primary} />
-      <Text style={styles.cardText}>{item.title}</Text>
+  const renderCard = ({ item }: any) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.85}
+      onPress={() => navigation.navigate(item.route)}
+    >
+      <View style={styles.iconBox}>
+        <Icon name={item.icon} size={26} color={COLORS.light.primary} />
+      </View>
+
+      <View style={styles.textBox}>
+        <Text style={styles.label}>{item.label}</Text>
+        <Text style={styles.value}>{item.value}</Text>
+      </View>
+
+      <Icon name="chevron-forward" size={18} color="#bbb" />
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Admin Dashboard</Text>
-        <Text style={styles.welcome}>Welcome, {auth.currentUser?.email}</Text>
+        <Text style={styles.title}>Dashboard</Text>
+        <Text style={styles.subtitle}>
+          Welcome, {auth.currentUser?.email}
+        </Text>
       </View>
 
-      <FlatList
-        data={menuItems}
-        renderItem={renderMenuItem}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        contentContainerStyle={styles.grid}
-      />
-
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Icon name="log-out" size={24} color={COLORS.light.primary} />
-        <Text style={styles.btnText}>Logout</Text>
-      </TouchableOpacity>
+      {/* Loader */}
+      {loading ? (
+        <ActivityIndicator size="large" color={COLORS.light.primary} />
+      ) : (
+        <FlatList
+          data={stats}
+          renderItem={renderCard}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 12 }}
+          contentContainerStyle={{ gap: 12 }}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
 
+/* ================= STYLES ================= */
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  header: { alignItems: "center", marginBottom: 30 },
-  title: { fontSize: 28, fontWeight: "bold", textAlign: "center", marginBottom: 10, color: COLORS.light.primary },
-  welcome: { fontSize: 16, textAlign: "center", marginBottom: 10, color: "#292828ff" },
-  grid: { paddingBottom: 20 },
-  card: { flex: 1, margin: 5, padding: 25, borderRadius: 15, alignItems: "center", justifyContent: "center", elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  cardText: { color: "#252525ff", fontSize: 14, fontWeight: "normal", marginTop: 10, textAlign: "center" },
-  logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#fff", padding: 15, borderRadius: 8, marginTop: 20 },
-  btnText: { color: COLORS.light.primary, marginLeft: 10, fontSize: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: "#f7f7f7",
+    padding: 16,
+  },
+
+  header: {
+    marginBottom: 20,
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#000",
+  },
+
+  subtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    color: "#666",
+  },
+
+  card: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+
+  iconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: "#ededed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  textBox: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  label: {
+    fontSize: 13,
+    color: "#777",
+  },
+
+  value: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#000",
+    marginTop: 2,
+  },
 });
