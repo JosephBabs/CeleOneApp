@@ -13,7 +13,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 // Add these imports at the top of navigation.tsx
-import { BackHandler } from 'react-native';
+// import { BackHandler } from 'react-native';
 
 // Screens
 import SplashScreen from '../modules/splashscreen/SplashScreen';
@@ -34,6 +34,7 @@ import AdminDashboard from '../modules/Admin/AdminDashboard';
 import AdminPosts from '../modules/Admin/AdminPosts';
 import AdminUsers from '../modules/Admin/AdminUsers';
 import AdminChatrooms from '../modules/Admin/AdminChatrooms';
+import AdminMusicAndFilms from '../modules/Admin/AdminFIlmsAndSongs';
 import AdminPendingRequests from '../modules/Admin/AdminPendingRequests';
 import AdminPlatformRequests from '../modules/Admin/AdminPlatformRequests';
 import AdminProfiles from '../modules/Admin/AdminProfiles';
@@ -54,6 +55,7 @@ import CantiqueAnglais from '../modules/Cantiques/CantiqueAnglais';
 import CantiqueFrancais from '../modules/Cantiques/CantiqueFrancais';
 import CantiqueDetails from '../modules/Cantiques/CantiqueDetails';
 import CreatePlatform from '../modules/messages/CreatePlatform';
+import MediaStream from '../modules/Media';
 import Requests from '../modules/Messages/Requests';
 import { useModal, ModalProvider } from './ModalContext';
 
@@ -66,7 +68,9 @@ export type RootStackParamList = {
   Profile: undefined;
   MainNav: undefined;
   PostDetail: undefined;
+  MediaStream: undefined;
   Notifications: undefined;
+  AdminMusicAndFilms: undefined;
   Settings: undefined;
   ChatRoom: undefined;
   GroupInfo: undefined;
@@ -76,7 +80,9 @@ export type RootStackParamList = {
   AdminPosts: undefined;
   AdminUsers: undefined;
   AdminChatrooms: undefined;
+  AdminPlatformRequests: undefined;
   AdminPendingRequests: undefined;
+  AdminTVChannels: undefined;
   AdminProfiles: undefined;
   AdminCantiques: undefined;
   TenCommandments: undefined;
@@ -139,12 +145,12 @@ export default function AppNavigator() {
   const [languageSet, setLanguageSet] = useState<boolean | null>(null);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
 
-  const resetOnboarding = async () => {
-    await AsyncStorage.removeItem('hasLaunched');
-    console.log(
-      '✅ Onboarding state cleared. Next launch will show onboarding again.',
-    );
-  };
+  // const resetOnboarding = async () => {
+  //   await AsyncStorage.removeItem('hasLaunched');
+  //   console.log(
+  //     '✅ Onboarding state cleared. Next launch will show onboarding again.',
+  //   );
+  // };
 
   useEffect(() => {
     const checkAppState = async () => {
@@ -171,26 +177,27 @@ export default function AppNavigator() {
   }, [i18n]);
 
   // Create a component to handle the back button
-  const BackButtonHandler = () => {
-    const { activeModal, closeModal } = useModal();
+  // const BackButtonHandler = () => {
+  //   const { activeModal, closeModal } = useModal();
 
-    useEffect(() => {
-      const backHandler = BackHandler.addEventListener(
-        'hardwareBackPress',
-        () => {
-          if (activeModal) {
-            closeModal();
-            return true; // Return true to indicate we've handled the back press
-          }
-          return false; // Return false to let the default back behavior continue
-        },
-      );
+  //   useEffect(() => {
+  //     const backHandler = BackHandler.addEventListener(
+  //       'hardwareBackPress',
+  //       () => {
+  //         if (activeModal) {
+  //           closeModal();
+  //           return true; // Return true to indicate we've handled the back press
+  //         }
+  //         return false; // Return false to let the default back behavior continue
+  //       },
+  //     );
 
-      return () => backHandler.remove();
-    }, [activeModal, closeModal]);
+  //     return () => backHandler.remove();
+  //   }, [activeModal, closeModal]);
 
-    return null; // This component doesn't render anything
-  };
+  //   return null; // This component doesn't render anything
+  // };
+  
   const handleSelectLanguage = async (lng: string) => {
     await AsyncStorage.setItem('user-language', lng);
     await i18n.changeLanguage(lng);
@@ -233,6 +240,7 @@ export default function AppNavigator() {
               <Stack.Screen name="Notifications" component={Notifications} />
               <Stack.Screen name="ChatRoom" component={ChatRoom} />
               <Stack.Screen name="GroupInfo" component={GroupInfo} />
+              <Stack.Screen name="MediaStream" component={MediaStream} />
               <Stack.Screen
                 name="RadioPlayerScreen"
                 component={RadioPlayerScreen}
@@ -240,6 +248,7 @@ export default function AppNavigator() {
               <Stack.Screen name="TvPlayerScreen" component={TvPlayerScreen} />
               <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
               <Stack.Screen name="AdminPosts" component={AdminPosts} />
+              <Stack.Screen name="AdminMusicAndFilms" component={AdminMusicAndFilms} />
               <Stack.Screen name="AdminUsers" component={AdminUsers} />
               <Stack.Screen name="AdminChatrooms" component={AdminChatrooms} />
               <Stack.Screen

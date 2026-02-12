@@ -23,6 +23,8 @@ export default function AdminDashboard({ navigation }: any) {
     platformRequests: 0,
     cantiques: 0,
     tvChannels: 0,
+    filmsAndSongs: 0,
+    videos: 0,
   });
 
   /* ================= FETCH COUNTS ================= */
@@ -36,6 +38,8 @@ export default function AdminDashboard({ navigation }: any) {
         platformSnap,
         cantiquesSnap,
         tvSnap,
+        filmsAndSongsSnap,
+        videsoSnap,
       ] = await Promise.all([
         getDocs(collection(db, "user_data")),
         getDocs(collection(db, "chatrooms")),
@@ -44,6 +48,8 @@ export default function AdminDashboard({ navigation }: any) {
         getDocs(collection(db, "platformRequests")),
         getDocs(collection(db, "cantiques")),
         getDocs(collection(db, "channels")),
+        getDocs(collection(db, "songs"), ),
+        getDocs(collection(db, "videos"), ),
       ]);
 
       setCounts({
@@ -54,6 +60,8 @@ export default function AdminDashboard({ navigation }: any) {
         platformRequests: platformSnap.size,
         cantiques: cantiquesSnap.size,
         tvChannels: tvSnap.size,
+        filmsAndSongs: filmsAndSongsSnap.size,
+        videos: videsoSnap.size, // Use the size of the videos collection
       });
     } catch (error) {
       console.error("Error fetching dashboard counts:", error);
@@ -116,6 +124,14 @@ export default function AdminDashboard({ navigation }: any) {
       value: counts.tvChannels,
       icon: "tv",
       route: "AdminTVChannels",
+    },
+    
+    {
+      id: "8",
+      label: "Films & Songs",
+      value: counts.filmsAndSongs + counts.videos || 0,
+      icon: "film",
+      route: "AdminMusicAndFilms",
     },
   ];
 

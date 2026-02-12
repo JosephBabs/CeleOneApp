@@ -701,6 +701,8 @@ const Home = ({ navigation }: any) => {
         {/* <Text style={styles.titleSimple2}>{t("home.explore")}</Text> */}
 
         <View style={styles.headerIcons}>
+
+
           {isAdmin && (
             <TouchableOpacity
               onPress={() => navigation.navigate('AdminDashboard')}
@@ -709,6 +711,18 @@ const Home = ({ navigation }: any) => {
               <Icon name="shield-checkmark" size={24} color="#444" />
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('MediaStream')}
+          >
+            <Icon
+              name="film-outline"
+              size={24}
+              color="#444"
+              style={styles.iconRight}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => navigation.navigate('Notifications')}
           >

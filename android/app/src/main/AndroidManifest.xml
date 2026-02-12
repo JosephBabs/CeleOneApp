@@ -1,21 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.celeoneapp">
-
     <!-- INTERNET -->
     <uses-permission android:name="android.permission.INTERNET" />
-
     <!-- Notifications -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
     <!-- Storage (optional, only if you really need it) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+        android:maxSdkVersion="32" />
+        <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission
+    android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+    tools:ignore="ScopedStorage" />
 
     <!-- Overlay (for dev menu) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
     <application
         android:name=".MainApplication"
         android:label="Cèlè One"
@@ -25,7 +27,6 @@
         android:theme="@style/AppTheme"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true">
-
         <!-- 🔥 FIREBASE MESSAGING SERVICE -->
         <service
             android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
@@ -34,13 +35,11 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-
         <!-- 🔥 FIREBASE BACKGROUND HANDLER -->
         <service
             android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingHeadlessService"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />
-
         <!-- MAIN ACTIVITY -->
         <activity
             android:name=".MainActivity"
@@ -49,14 +48,10 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
-
     </application>
-
 </manifest>

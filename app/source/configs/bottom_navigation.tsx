@@ -17,7 +17,7 @@ import Icon from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
 
 import HomeScreen from "../modules/homescreen";
-import LeComitee from "../modules/leComite";
+import Media from "../modules/Media";
 import Documents from "../modules/Documents";
 import Messages from "../modules/Messages"; 
 import Cantiques from "../modules/Cantiques";
@@ -44,7 +44,7 @@ import navigation from "./navigation";
 
 type TabRouteName =
   | "Home"
-  | "LeComite"
+  | "Media"
   | "Documents"
   | "Messages"
   | "Cantiques";
@@ -103,7 +103,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
         const icons: Record<TabRouteName, string> = {
           Home: "home-outline",
-          LeComite: "people-outline",
+          Media: "film-outline",
           Documents: "document-text-outline",
           Messages: "chatbubbles-outline",
           Cantiques: "musical-notes-outline",
@@ -153,10 +153,10 @@ export default function BottomTabNavigator() {
       tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="LeComite" component={LeComitee} />
       <Tab.Screen name="Documents" component={Documents} />
       <Tab.Screen name="Messages" component={Messages} />
       <Tab.Screen name="Cantiques" component={Cantiques} />
+      <Tab.Screen name="Media" component={Media} />
     </Tab.Navigator>
   );
 }

@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 // import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initFCM } from '../../../../src/services/notifications';
 
 const SplashScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -21,6 +22,7 @@ const SplashScreen: React.FC = () => {
           const unsubscribe = onAuthStateChanged(auth, user => {
             if (user) {
               console.log('User is logged in:', user.uid);
+              initFCM(user.uid);
               // Navigate to MainNav
               navigation.replace('MainNav');
             } else {

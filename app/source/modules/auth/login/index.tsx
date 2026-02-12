@@ -26,6 +26,7 @@ import { auth } from "../firebaseConfig";
 
 // For Google Sign-In
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { initFCM } from "../../../../../src/services/notifications";
 
 // Initialize Google Sign-In
 GoogleSignin.configure({
@@ -60,6 +61,8 @@ const LoginScreen = ({ navigation }: any) => {
         password.trim()
       );
       console.log("Logged in:", userCredential.user.uid);
+      // 🔥 Register FCM token
+    await initFCM(userCredential.user.uid)
       navigation.replace("MainNav");
     } catch (error: any) {
       console.error(error);
@@ -115,6 +118,9 @@ const LoginScreen = ({ navigation }: any) => {
       const userCredential = await signInWithCredential(auth, googleCredential);
 
       console.log("Google logged in:", userCredential.user.uid);
+        // 🔥 Register FCM token
+    await initFCM(userCredential.user.uid); // <- call this AFTER login
+
       navigation.replace("MainNav");
     } catch (error: any) {
       console.error(error);
