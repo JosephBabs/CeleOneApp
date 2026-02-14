@@ -1,23 +1,42 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.celeoneapp">
-    <!-- INTERNET -->
+
+    <!-- ================= PERMISSIONS ================= -->
+
+    <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Notifications -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Storage (optional, only if you really need it) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-        <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Camera -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Storage (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission
-    android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-    tools:ignore="ScopedStorage" />
 
-    <!-- Overlay (for dev menu) -->
+    <!-- Storage (Old Android <= 12) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- ⚠️ ONLY KEEP IF REALLY REQUIRED -->
+    <!-- Remove this if you don't absolutely need full file manager access -->
+    <!--
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    -->
+
+    <!-- Dev overlay -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- ================= APPLICATION ================= -->
+
     <application
         android:name=".MainApplication"
         android:label="Cèlè One"
@@ -27,7 +46,8 @@
         android:theme="@style/AppTheme"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true">
-        <!-- 🔥 FIREBASE MESSAGING SERVICE -->
+
+        <!-- Firebase Messaging Service -->
         <service
             android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
             android:exported="false">
@@ -35,12 +55,14 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-        <!-- 🔥 FIREBASE BACKGROUND HANDLER -->
+
+        <!-- Firebase Background Handler -->
         <service
             android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingHeadlessService"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />
-        <!-- MAIN ACTIVITY -->
+
+        <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
@@ -48,10 +70,14 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
+
     </application>
+
 </manifest>

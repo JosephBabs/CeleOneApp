@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
   Switch,
   ScrollView,
   Image,
+  Alert,
+  Platform,
 } from 'react-native';
-import { Alert } from 'react-native';
 
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -23,30 +24,37 @@ import { getAuth, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../auth/firebaseConfig';
 
+/**
+ * Redesigned Profile + Settings page to match the provided screenshot:
+ * - Big "Profile" header + top-right menu
+ * - Avatar + Name + Email + small edit button overlay
+ * - Green Premium card
+ * - Clean list rows with icons + chevron
+ * - Language row shows value on right
+ * - Dark mode switch at bottom
+ * - Added "Subscription Settings"
+ * - Keeps your translation/theme/language modal/logout logic
+ */
+
 const Settings = ({ navigation }: any) => {
   const { t, i18n } = useTranslation();
   const { mode, toggleTheme } = useAppTheme();
   const isDark = mode === 'dark';
 
+  const auth = getAuth();
+
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Optional: subscription info placeholder (wire this to your billing later)
+  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('notifications-enabled').then(value => {
       if (value !== null) setNotificationsEnabled(value === 'true');
     });
   }, []);
-
-  const toggleNotifications = async () => {
-    const newValue = !notificationsEnabled;
-    setNotificationsEnabled(newValue);
-    await AsyncStorage.setItem('notifications-enabled', newValue.toString());
-  };
-
-  const auth = getAuth();
-
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -56,28 +64,36 @@ const Settings = ({ navigation }: any) => {
       const ref = doc(db, 'user_data', uid);
       const snap = await getDoc(ref);
 
-      if (snap.exists()) {
-        setUserProfile(snap.data());
-      }
+      if (snap.exists()) setUserProfile(snap.data());
     };
 
     loadUser();
   }, [auth.currentUser]);
+
+  const backgroundColor = isDark ? Colors.darkBackground : '#F6F7F9';
+  const cardColor = isDark ? '#151515' : '#FFFFFF';
+  const textColor = isDark ? Colors.textDark : '#111111';
+  const subTextColor = isDark ? '#B8B8B8' : '#777777';
+  const dividerColor = isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF';
+
+  const toggleNotifications = async () => {
+    const newValue = !notificationsEnabled;
+    setNotificationsEnabled(newValue);
+    await AsyncStorage.setItem('notifications-enabled', newValue.toString());
+  };
 
   const confirmLogout = () => {
     Alert.alert(
       t('settings.logout') || 'Logout',
       t('settings.confirmLogout') || 'Are you sure you want to log out?',
       [
-        { text: t('settings.cancel'), style: 'cancel' },
+        { text: t('settings.cancel') || 'Cancel', style: 'cancel' },
         {
-          text: t('settings.confirm'),
+          text: t('settings.confirm') || 'Logout',
           style: 'destructive',
           onPress: async () => {
             try {
               await signOut(auth);
-              console.log('User logged out');
-              // Navigate to login screen
               navigation.replace('Login');
             } catch (error) {
               console.error('Logout error:', error);
@@ -89,25 +105,10 @@ const Settings = ({ navigation }: any) => {
     );
   };
 
-  const backgroundColor = isDark
-    ? Colors.darkBackground
-    : Colors.lightBackground;
-  const textColor = isDark ? Colors.textDark : Colors.textLight;
-
   const changeLanguage = async (lng: string) => {
     await i18n.changeLanguage(lng);
     await AsyncStorage.setItem('user-language', lng);
     setLanguageModalVisible(false);
-  };
-
-  // Icon mapping for options
-  const optionIcons = {
-    language: 'language-outline',
-    notifications: 'notifications-outline',
-    darkMode: 'moon-outline',
-    privacyPolicy: 'document-text-outline',
-    aboutApp: 'information-circle-outline',
-    user: 'person-circle-outline',
   };
 
   const showAlert = (message: string) => {
@@ -116,140 +117,285 @@ const Settings = ({ navigation }: any) => {
     });
   };
 
+  const displayName = useMemo(() => {
+    const f = userProfile?.firstName || 'Andrew';
+    const l = userProfile?.lastName || 'Ainsley';
+    return `${f} ${l}`;
+  }, [userProfile]);
+
+  const displayEmail = auth.currentUser?.email || 'andrew_ainsley@yourdomain.com';
+
+  const languageLabel = useMemo(() => {
+    const lng = (i18n.language || 'en').toLowerCase();
+    if (lng.startsWith('en')) return 'English (US)';
+    if (lng.startsWith('fr')) return 'Français';
+    if (lng.startsWith('es')) return 'Español';
+    if (lng.startsWith('yo')) return 'Yorùbá';
+    if (lng.startsWith('gou')) return 'Goun';
+    return lng.toUpperCase();
+  }, [i18n.language]);
+
+  // --- Row component (matches screenshot list style)
+  const Row = ({
+    icon,
+    label,
+    onPress,
+    right,
+    danger,
+  }: {
+    icon: string;
+    label: string;
+    onPress?: () => void;
+    right?: React.ReactNode;
+    danger?: boolean;
+  }) => {
+    return (
+      <TouchableOpacity
+        activeOpacity={onPress ? 0.7 : 1}
+        onPress={onPress}
+        style={[styles.row, { borderBottomColor: dividerColor }]}
+      >
+        <View style={styles.rowLeft}>
+          <View
+            style={[
+              styles.rowIconWrap,
+              { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
+            ]}
+          >
+            <Ionicons
+              name={icon as any}
+              size={18}
+              color={danger ? '#E53935' : isDark ? '#EDEDED' : '#222'}
+            />
+          </View>
+
+          <Text
+            style={[
+              styles.rowLabel,
+              { color: danger ? '#E53935' : textColor },
+            ]}
+          >
+            {label}
+          </Text>
+        </View>
+
+        <View style={styles.rowRight}>
+          {right ? (
+            right
+          ) : (
+            <Ionicons name="chevron-forward" size={18} color={subTextColor} />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={styles.header1}>
-          <Text style={[styles.title, { color: textColor }]}>
-            {t('settings.title')}
-          </Text>
-          <Image source={d_assets.images.appLogo} style={styles.logo} />
-          {/* <Text style={styles.titleSimple2}>{t("home.explore")}</Text> */}
-        </View>
-        {/* <Text style={[styles.title, { color: textColor }]}>{t("settings.title")}</Text> */}
-
-        <TouchableOpacity
-          style={styles.optionButton}
-          onPress={() => setAccountOpen(!accountOpen)}
-        >
-          <View style={styles.iconText}>
-            <Ionicons name="person-outline" size={24} color={textColor} />
-            <Text style={[styles.optionText, { color: textColor }]}>
-              {t('settings.monCompte')}
-              {userProfile &&
-                ` (${userProfile.firstName} ${userProfile.lastName})`}
+      <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+        {/* Header (Profile + menu) */}
+        <View style={styles.topHeader}>
+          <View style={styles.topHeaderLeft}>
+            <Text style={[styles.headerTitle, { color: textColor }]}>
+              {t('settings.title') || 'Profile'}
             </Text>
           </View>
 
-          <Ionicons
-            name={accountOpen ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color={textColor}
-          />
-        </TouchableOpacity>
-        {accountOpen && (
-          <View style={styles.subMenu}>
+          <TouchableOpacity
+            style={[
+              styles.headerMenuBtn,
+              { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F3F5' },
+            ]}
+            onPress={() => showAlert('More options')}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={textColor} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Profile summary */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarWrap}>
+            <Image
+              source={{
+                uri:
+                  userProfile?.photoURL ||
+                  'https://i.pravatar.cc/300?img=11',
+              }}
+              style={styles.avatar}
+            />
             <TouchableOpacity
-              style={styles.subItem}
+              style={[styles.avatarEdit, { backgroundColor: COLORS.light.primary }]}
               onPress={() => navigation.navigate('Profile')}
+              activeOpacity={0.8}
             >
-              <Ionicons name="create-outline" size={20} color={textColor} />
-              <Text style={[styles.subText, { color: textColor }]}>
-                {t('settings.updateProfile') || 'Edit account'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.subItem} onPress={confirmLogout}>
-              <Ionicons name="log-out-outline" size={20} color="red" />
-              <Text style={[styles.subText, { color: 'red' }]}>
-                {t('settings.logout')}
-              </Text>
+              <Ionicons name="create" size={14} color="#fff" />
             </TouchableOpacity>
           </View>
-        )}
-        {/* Language */}
-        <TouchableOpacity
-          style={[styles.optionButton]}
-          onPress={() => setLanguageModalVisible(true)}
-        >
-          <View style={styles.iconText}>
-            <Ionicons name={optionIcons.language} size={24} color={textColor} />
-            <Text style={[styles.optionText, { color: textColor }]}>
-              {t('settings.language')}
+
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.profileName, { color: textColor }]} numberOfLines={1}>
+              {displayName}
             </Text>
-          </View>
-          <Text style={[styles.optionValue, { color: textColor }]}>
-            {i18n.language.toUpperCase()} ⌄
-          </Text>
-        </TouchableOpacity>
+            <Text style={[styles.profileEmail, { color: subTextColor }]} numberOfLines={1}>
+              {displayEmail}
+            </Text>
 
-        {/* Notifications */}
-        <View style={styles.optionButton}>
-          <View style={styles.iconText}>
-            <Ionicons
-              name={optionIcons.notifications}
-              size={24}
-              color={textColor}
+            {/* Optional: small premium status pill */}
+            <View style={styles.pillRow}>
+              <View
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: isPremium
+                      ? 'rgba(46, 204, 113, 0.14)'
+                      : isDark
+                        ? 'rgba(255,255,255,0.06)'
+                        : '#F2F3F5',
+                    borderColor: isPremium ? 'rgba(46, 204, 113, 0.32)' : 'transparent',
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isPremium ? 'diamond' : 'lock-closed'}
+                  size={14}
+                  color={isPremium ? COLORS.light.primary : subTextColor}
+                />
+                <Text
+                  style={[
+                    styles.pillText,
+                    { color: isPremium ? COLORS.light.primary : subTextColor },
+                  ]}
+                >
+                  {isPremium ? 'Premium Active' : 'Free Plan'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Premium banner card (like screenshot) */}
+        <View style={[styles.premiumCard, { backgroundColor: COLORS.light.primary }]}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={styles.premiumTitle}>Enjoy All Benefits!</Text>
+            <Text style={styles.premiumBody}>
+              Enjoy listening songs & podcasts with better audio quality, without restrictions, and without ads.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.premiumBtn}
+              activeOpacity={0.9}
+              onPress={() => {
+                // Navigate to subscription screen or open your paywall
+                // navigation.navigate('Subscription');
+                setIsPremium(true);
+                Alert.alert('Subscription', 'Open your subscription paywall here.');
+              }}
+            >
+              <Text style={[styles.premiumBtnText, { color: COLORS.light.primary }]}>
+                Get Premium
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Right image placeholder (kept local-friendly) */}
+          <View style={styles.premiumArt}>
+            <Image
+              source={{
+                uri: 'https://images.unsplash.com/photo-1520975958225-29de2d06cfd3?auto=format&fit=crop&w=300&q=60',
+              }}
+              style={styles.premiumArtImg}
             />
-            <Text style={[styles.optionText, { color: textColor }]}>
-              {t('settings.notifications')}
-            </Text>
           </View>
-          <Switch
-            value={notificationsEnabled}
-            onValueChange={toggleNotifications}
-            trackColor={{ false: '#ccc', true: Colors.light.primary }}
-            thumbColor={notificationsEnabled ? Colors.light.primary : '#f4f3f4'}
+        </View>
+
+        {/* Settings list container */}
+        <View style={[styles.listCard, { backgroundColor: cardColor }]}>
+          <Row
+            icon="person-outline"
+            label="Profile"
+            onPress={() => navigation.navigate('Profile')}
+          />
+
+          <Row
+            icon="notifications-outline"
+            label="Notification"
+            right={
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={toggleNotifications}
+                trackColor={{ false: '#CFCFCF', true: COLORS.light.primary }}
+                thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+              />
+            }
+          />
+
+          <Row icon="mic-outline" label="Audio & Video" onPress={() => showAlert('Audio & Video settings')} />
+
+          <Row icon="play-circle-outline" label="Playback" onPress={() => showAlert('Playback settings')} />
+
+          <Row icon="cloud-download-outline" label="Data Saver & Storage" onPress={() => showAlert('Storage settings')} />
+
+          <Row icon="shield-checkmark-outline" label="Security" onPress={() => showAlert('Security settings')} />
+
+          {/* NEW: Subscription Settings */}
+          <Row
+            icon="card-outline"
+            label="Subscription Settings"
+            onPress={() => {
+              // navigation.navigate('Subscription');
+              Alert.alert('Subscription Settings', 'Open subscription settings screen here.');
+            }}
+          />
+
+          {/* Language */}
+          <Row
+            icon="language-outline"
+            label="Language"
+            onPress={() => setLanguageModalVisible(true)}
+            right={
+              <View style={styles.valueRight}>
+                <Text style={[styles.valueText, { color: subTextColor }]}>{languageLabel}</Text>
+                <Ionicons name="chevron-forward" size={18} color={subTextColor} />
+              </View>
+            }
+          />
+
+          {/* Dark Mode */}
+          <Row
+            icon="moon-outline"
+            label="Dark Mode"
+            right={
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: '#CFCFCF', true: COLORS.light.primary }}
+                thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+              />
+            }
           />
         </View>
 
-        {/* Dark Mode */}
-        <View style={styles.optionButton}>
-          <View style={styles.iconText}>
-            <Ionicons name={optionIcons.darkMode} size={24} color={textColor} />
-            <Text style={[styles.optionText, { color: textColor }]}>
-              {t('settings.darkMode')}
-            </Text>
-          </View>
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColor={{ false: '#ccc', true: Colors.light.primary }}
-            thumbColor={isDark ? Colors.light.primary : '#f4f3f4'}
+        {/* Extra links (optional, clean) */}
+        <View style={[styles.listCard, { backgroundColor: cardColor, marginTop: 14 }]}>
+          <Row
+            icon="document-text-outline"
+            label="Privacy Policy"
+            onPress={() => showAlert(t('settings.privacyPolicyText') || 'Privacy policy details...')}
+          />
+          <Row
+            icon="information-circle-outline"
+            label="About App"
+            onPress={() => showAlert(t('settings.aboutAppText') || 'About app details...')}
+          />
+          <Row
+            icon="log-out-outline"
+            label={t('settings.logout') || 'Logout'}
+            onPress={confirmLogout}
+            danger
           />
         </View>
 
-        {/* Privacy Policy */}
-        <TouchableOpacity
-          style={styles.optionButton}
-          onPress={() => showAlert(t('settings.privacyPolicyText'))}
-        >
-          <View style={styles.iconText}>
-            <Ionicons
-              name={optionIcons.privacyPolicy}
-              size={24}
-              color={textColor}
-            />
-            <Text style={[styles.optionText, { color: textColor }]}>
-              {t('settings.privacyPolicy')}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* About */}
-        <TouchableOpacity
-          style={styles.optionButton}
-          onPress={() => showAlert(t('settings.aboutAppText'))}
-        >
-          <View style={styles.iconText}>
-            <Ionicons name={optionIcons.aboutApp} size={24} color={textColor} />
-            <Text style={[styles.optionText, { color: textColor }]}>
-              {t('settings.aboutApp')}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Language Selection Modal */}
+        {/* Language Modal */}
         <Modal
           visible={languageModalVisible}
           animationType="slide"
@@ -257,26 +403,41 @@ const Settings = ({ navigation }: any) => {
           onRequestClose={() => setLanguageModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.languageModal, { backgroundColor }]}>
-              <Text style={[styles.languageTitle, { color: textColor }]}>
-                {t('settings.selectLanguage')}
-              </Text>
+            <View style={[styles.modalSheet, { backgroundColor: cardColor }]}>
+              <View style={styles.modalTop}>
+                <Text style={[styles.modalTitle, { color: textColor }]}>
+                  {t('settings.selectLanguage') || 'Select Language'}
+                </Text>
+                <Pressable onPress={() => setLanguageModalVisible(false)} style={styles.modalCloseBtn}>
+                  <Ionicons name="close" size={20} color={textColor} />
+                </Pressable>
+              </View>
 
               {['en', 'fr', 'yo', 'gou', 'es'].map(lng => (
                 <Pressable
                   key={lng}
-                  style={styles.languageItem}
+                  style={[styles.langRow, { borderBottomColor: dividerColor }]}
                   onPress={() => changeLanguage(lng)}
                 >
-                  <Text style={{ color: textColor }}>{t(`lang.${lng}`)}</Text>
+                  <Text style={[styles.langText, { color: textColor }]}>{t(`lang.${lng}`)}</Text>
+                  {i18n.language?.toLowerCase().startsWith(lng) ? (
+                    <Ionicons name="checkmark" size={18} color={COLORS.light.primary} />
+                  ) : (
+                    <View style={{ width: 18 }} />
+                  )}
                 </Pressable>
               ))}
 
               <Pressable
-                style={[styles.closeButton, { borderColor: textColor }]}
+                style={[
+                  styles.modalAction,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
+                ]}
                 onPress={() => setLanguageModalVisible(false)}
               >
-                <Text style={{ color: textColor }}>{t('common.close')}</Text>
+                <Text style={[styles.modalActionText, { color: textColor }]}>
+                  {t('common.close') || 'Close'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -288,91 +449,226 @@ const Settings = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    // paddingVertical: 20,
-    // paddingHorizontal: 16,
-    letterSpacing: 1,
-    color: COLORS.light.primary,
-    // marginBlockStart: 22
+
+  topHeader: {
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  topHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  headerMenuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  logo: {
-    height: 40,
-    width: 50,
-    objectFit: 'contain',
-  },
-  header1: {
+  profileCard: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 10,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    // marginBlockStart: 22,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 14,
+  },
+  avatarWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+  },
+  avatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+  },
+  avatarEdit: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  profileEmail: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+
+  pillRow: { marginTop: 10, flexDirection: 'row' },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  premiumCard: {
+    marginTop: 10,
+    marginHorizontal: 18,
+    borderRadius: 22,
+    padding: 18,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  premiumTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  premiumBody: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13.5,
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  premiumBtn: {
     backgroundColor: '#fff',
-    // elevation: 1
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
   },
-  optionButton: {
+  premiumBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  premiumArt: {
+    width: 92,
+    height: 110,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  premiumArtImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+
+  listCard: {
+    marginTop: 16,
+    marginHorizontal: 18,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
     borderBottomWidth: 1,
-    borderColor: '#eee',
   },
-  iconText: {
+  rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12, // spacing between icon and text
+    gap: 12,
   },
-  optionText: {
-    fontSize: 18,
+  rowIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  optionValue: {
-    fontSize: 16,
-    fontWeight: '600',
+  rowLabel: {
+    fontSize: 16.5,
+    fontWeight: '700',
   },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  valueRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  valueText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  languageModal: {
-    padding: 24,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  modalSheet: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 18,
   },
-  languageTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  languageItem: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderColor: '#ddd',
-  },
-  closeButton: {
-    marginTop: 30,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-  },
-  subMenu: {
-    paddingLeft: 48,
-    marginTop: 8,
-  },
-  subItem: {
+  modalTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    paddingBottom: 10,
   },
-  subText: {
-    marginLeft: 12,
-    fontSize: 15,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langRow: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  langText: {
+    fontSize: 15.5,
+    fontWeight: '700',
+  },
+  modalAction: {
+    marginTop: 14,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalActionText: {
+    fontSize: 15.5,
+    fontWeight: '800',
   },
 });
 

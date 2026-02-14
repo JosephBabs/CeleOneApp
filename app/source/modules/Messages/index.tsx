@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,20 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import Tooltip from '../../configs/Tooltip';
 
 import { useTranslation } from 'react-i18next';
 import styless from '../../../../styles';
-import Icon from 'react-native-vector-icons/Ionicons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { COLORS } from '../../../core/theme/colors';
 import { d_assets } from '../../configs/assets';
 import { auth, db } from '../auth/firebaseConfig';
 import Requests from './Requests';
+
 import {
   collection,
   getDocs,
@@ -43,16 +47,19 @@ export default function Messages({ navigation }: any) {
   const [chatRooms, setChatRooms] = useState<any[]>([]);
   const [userChatRooms, setUserChatRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [pendingRequest, setPendingRequest] = useState(false);
 
+  // Create platform
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [platformName, setPlatformName] = useState('');
   const [platformDescription, setPlatformDescription] = useState('');
   const [submittingPlatform, setSubmittingPlatform] = useState(false);
 
+  // Friends
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [friends, setFriends] = useState<any[]>([]);
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
@@ -61,22 +68,26 @@ export default function Messages({ navigation }: any) {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
+
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
   const [messageListeners, setMessageListeners] = useState<(() => void)[]>([]);
   const [activeTab, setActiveTab] = useState<'groups' | 'friends'>('groups');
+
+  const [searchRooms, setSearchRooms] = useState('');
 
   useEffect(() => {
     if (currentUser) {
       fetchChatRooms();
       fetchFriends();
       fetchFriendRequests();
+      fetchAllUsers(); // for lastMessage sender name formatting
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   useEffect(() => {
-    // Clean up message listeners when component unmounts
     return () => {
       messageListeners.forEach(unsubscribe => unsubscribe());
     };
@@ -89,83 +100,46 @@ export default function Messages({ navigation }: any) {
     }
   }, [showFriendsModal, currentUser]);
 
-  // Filter users based on search term
+  // Filter users
   useEffect(() => {
     if (allUsers.length > 0) {
       if (!userSearch.trim()) {
         setFilteredUsers(allUsers);
       } else {
-        const searchTermLower = userSearch.toLowerCase();
-        const filtered = allUsers.filter(
-          user =>
-            user.email?.toLowerCase().includes(searchTermLower) ||
-            user.firstName?.toLowerCase().includes(searchTermLower) ||
-            user.lastName?.toLowerCase().includes(searchTermLower),
+        const s = userSearch.toLowerCase();
+        setFilteredUsers(
+          allUsers.filter(
+            u =>
+              u.email?.toLowerCase().includes(s) ||
+              u.firstName?.toLowerCase().includes(s) ||
+              u.lastName?.toLowerCase().includes(s),
+          ),
         );
-        setFilteredUsers(filtered);
       }
     }
   }, [userSearch, allUsers]);
 
-  // Fetch all users from Firebase
+  const prettyName = (u: any) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim();
+
+  // ----- Data Fetching -----
   const fetchAllUsers = async () => {
     try {
       setLoadingFriends(true);
       const usersQuery = query(collection(db, 'user_data'));
+      const qs = await getDocs(usersQuery);
 
-      const querySnapshot = await getDocs(usersQuery);
-      const usersData = querySnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .filter(user => user.id !== currentUser?.uid); // Exclude current user
+      const usersData = qs.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(u => u.id !== currentUser?.uid);
 
       setAllUsers(usersData);
-      setFilteredUsers(usersData); // Initially show all users
-    } catch (error) {
-      console.error('Error fetching all users:', error);
+      setFilteredUsers(usersData);
+    } catch (e) {
+      console.error('Error fetching all users:', e);
     } finally {
       setLoadingFriends(false);
     }
   };
-
-  // Fetch all chat rooms from Firebase
-  // const fetchChatRooms = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const roomsQuery = query(collection(db, "chatrooms"));
-
-  //     const unsubscribe = onSnapshot(roomsQuery, async (querySnapshot) => {
-  //       const rooms = querySnapshot.docs.map((doc) => ({
-  //         id: doc.id,
-  //         ...doc.data(),
-  //       }));
-
-  //       // Check which rooms the user is a member of
-  //       const userRooms = rooms.filter((room) =>
-  //         room.members && room.members.includes(currentUser?.uid)
-  //       );
-
-  //       // Calculate unread counts for user rooms
-  //       const userRoomsWithUnread = await Promise.all(
-  //         userRooms.map(async (room) => {
-  //           const unreadCount = await getUnreadCount(room.id);
-  //           return { ...room, unreadCount };
-  //         })
-  //       );
-
-  //       setChatRooms(rooms);
-  //       setUserChatRooms(userRoomsWithUnread);
-  //       setLoading(false);
-  //     });
-
-  //     return unsubscribe;
-  //   } catch (error) {
-  //     console.error("Error fetching chat rooms:", error);
-  //     setLoading(false);
-  //   }
-  // };
 
   const fetchChatRooms = async () => {
     try {
@@ -173,30 +147,24 @@ export default function Messages({ navigation }: any) {
       const roomsQuery = query(collection(db, 'chatrooms'));
 
       const unsubscribe = onSnapshot(roomsQuery, async querySnapshot => {
-        const rooms = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const rooms = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        // Check which rooms the user is a member of
         const userRooms = rooms.filter(
-          room => room.members && room.members.includes(currentUser?.uid),
+          r => r.members && r.members.includes(currentUser?.uid),
         );
 
-        // Calculate unread counts and fetch last messages for user rooms
         const userRoomsWithData = await Promise.all(
-          userRooms.map(async room => {
-            const lastMessage = await getLastMessage(room.id);
-            const unreadCount = await getUnreadCount(room.id);
-            return { ...room, lastMessage, unreadCount };
+          userRooms.map(async r => {
+            const lastMessage = await getLastMessage(r.id);
+            const unreadCount = await getUnreadCount(r.id);
+            return { ...r, lastMessage, unreadCount };
           }),
         );
 
-        // Fetch last messages for all rooms
         const roomsWithLastMessage = await Promise.all(
-          rooms.map(async room => {
-            const lastMessage = await getLastMessage(room.id);
-            return { ...room, lastMessage };
+          rooms.map(async r => {
+            const lastMessage = await getLastMessage(r.id);
+            return { ...r, lastMessage };
           }),
         );
 
@@ -204,23 +172,19 @@ export default function Messages({ navigation }: any) {
         setUserChatRooms(userRoomsWithData);
         setLoading(false);
 
-        // Set up real-time listeners for messages in user's chat rooms
         setupMessageListeners(userRooms);
       });
 
       return unsubscribe;
-    } catch (error) {
-      console.error('Error fetching chat rooms:', error);
+    } catch (e) {
+      console.error('Error fetching chat rooms:', e);
       setLoading(false);
     }
   };
 
-  // Set up real-time listeners for messages in user's chat rooms
   const setupMessageListeners = (rooms: any[]) => {
-    // Create a new array to store the new listeners
     const newListeners: (() => void)[] = [];
 
-    // Set up new listeners
     rooms.forEach(room => {
       const messagesQuery = query(
         collection(db, 'chatrooms', room.id, 'messages'),
@@ -235,34 +199,22 @@ export default function Messages({ navigation }: any) {
           const messageText = messageData.text || messageData.content || null;
           const senderId = messageData.senderId || messageData.userId || null;
 
-          // Format the last message with sender name
           let formattedMessage = messageText;
+
           if (messageText && senderId) {
             if (senderId === currentUser?.uid) {
               formattedMessage = `${t('messages.you')}: ${messageText}`;
             } else {
-              // Get sender name from allUsers if available
-              const sender = allUsers.find(user => user.id === senderId);
-              if (sender) {
-                const senderName = `${sender.firstName || ''} ${
-                  sender.lastName || ''
-                }`.trim();
-                formattedMessage = `${senderName}: ${messageText}`;
-              }
+              const sender = allUsers.find(u => u.id === senderId);
+              if (sender) formattedMessage = `${prettyName(sender)}: ${messageText}`;
             }
           }
 
-          // Update the specific room in the state
-          setChatRooms(prevRooms =>
-            prevRooms.map(r =>
-              r.id === room.id ? { ...r, lastMessage: formattedMessage } : r,
-            ),
+          setChatRooms(prev =>
+            prev.map(r => (r.id === room.id ? { ...r, lastMessage: formattedMessage } : r)),
           );
-
-          setUserChatRooms(prevRooms =>
-            prevRooms.map(r =>
-              r.id === room.id ? { ...r, lastMessage: formattedMessage } : r,
-            ),
+          setUserChatRooms(prev =>
+            prev.map(r => (r.id === room.id ? { ...r, lastMessage: formattedMessage } : r)),
           );
         }
       });
@@ -270,11 +222,9 @@ export default function Messages({ navigation }: any) {
       newListeners.push(unsubscribe);
     });
 
-    // Update the state with the new listeners
     setMessageListeners(newListeners);
   };
 
-  // Get the last message for a specific room
   const getLastMessage = async (roomId: string): Promise<string | null> => {
     try {
       const messagesQuery = query(
@@ -283,38 +233,26 @@ export default function Messages({ navigation }: any) {
         limit(1),
       );
 
-      const querySnapshot = await getDocs(messagesQuery);
-      if (!querySnapshot.empty) {
-        const lastMessageDoc = querySnapshot.docs[0];
-        const messageData = lastMessageDoc.data();
-        const messageText = messageData.text || messageData.content || null;
-        const senderId = messageData.senderId || messageData.userId || null;
+      const qs = await getDocs(messagesQuery);
+      if (!qs.empty) {
+        const m = qs.docs[0].data();
+        const messageText = m.text || m.content || null;
+        const senderId = m.senderId || m.userId || null;
 
-        // Format the last message with sender name
         if (messageText && senderId) {
-          if (senderId === currentUser?.uid) {
-            return `${t('messages.you')}: ${messageText}`;
-          } else {
-            // Get sender name from allUsers if available
-            const sender = allUsers.find(user => user.id === senderId);
-            if (sender) {
-              const senderName = `${sender.firstName || ''} ${
-                sender.lastName || ''
-              }`.trim();
-              return `${senderName}: ${messageText}`;
-            }
-          }
+          if (senderId === currentUser?.uid) return `${t('messages.you')}: ${messageText}`;
+          const sender = allUsers.find(u => u.id === senderId);
+          if (sender) return `${prettyName(sender)}: ${messageText}`;
         }
         return messageText;
       }
       return null;
-    } catch (error) {
-      console.error('Error getting last message:', error);
+    } catch (e) {
+      console.error('Error getting last message:', e);
       return null;
     }
   };
 
-  // Get unread message count for a specific room
   const getUnreadCount = async (roomId: string): Promise<number> => {
     try {
       if (!currentUser?.uid) return 0;
@@ -324,15 +262,14 @@ export default function Messages({ navigation }: any) {
         where('userId', '!=', currentUser.uid),
       );
 
-      const messagesSnapshot = await getDocs(messagesQuery);
-      return messagesSnapshot.size;
-    } catch {
-      console.error('Error getting unread count');
+      const snap = await getDocs(messagesQuery);
+      return snap.size;
+    } catch (e) {
+      console.error('Error getting unread count', e);
       return 0;
     }
   };
 
-  // Check if user has pending request for a room
   const checkPendingRequest = async (roomId: string): Promise<boolean> => {
     try {
       const requestsQuery = query(
@@ -340,81 +277,72 @@ export default function Messages({ navigation }: any) {
         where('userId', '==', currentUser?.uid),
         where('roomId', '==', roomId),
       );
-      const snapshot = await getDocs(requestsQuery);
-      return !snapshot.empty;
-    } catch (error) {
-      console.error('Error checking pending request:', error);
+      const snap = await getDocs(requestsQuery);
+      return !snap.empty;
+    } catch (e) {
+      console.error('Error checking pending request:', e);
       return false;
     }
   };
 
-  // Handle opening chat or requesting join
+  // ----- Navigation & Actions -----
   const handleOpenChat = async (room: any) => {
     const isUserMember = userChatRooms.some(r => r.id === room.id);
 
     if (isUserMember) {
-      // User is a member, open chat
       navigation.navigate('ChatRoom', {
         chatId: room.id,
         chatName: room.name,
         chatAvatar: room.avatar,
       });
-    } else if (room.isPublic) {
-      // Public room, add user and open chat
+      return;
+    }
+
+    if (room.isPublic) {
       try {
-        // Add user to room members
         const roomRef = doc(db, 'chatrooms', room.id);
-        await updateDoc(roomRef, {
-          members: arrayUnion(currentUser?.uid),
-        });
-        // Open chat
+        await updateDoc(roomRef, { members: arrayUnion(currentUser?.uid) });
+
         navigation.navigate('ChatRoom', {
           chatId: room.id,
           chatName: room.name,
           chatAvatar: room.avatar,
         });
-      } catch (error) {
+      } catch (e) {
         Alert.alert(t('messages.error'), t('messagesScreen.failedJoinRoom'));
       }
-    } else {
-      // Private room, show join request modal
-      const hasPending = await checkPendingRequest(room.id);
-      setSelectedRoom({ ...room, hasPendingRequest: hasPending });
-      setShowModal(true);
+      return;
     }
+
+    const hasPending = await checkPendingRequest(room.id);
+    setSelectedRoom({ ...room, hasPendingRequest: hasPending });
+    setShowJoinModal(true);
   };
 
-  // Submit join request to Firebase
   const handleApplyToJoin = async () => {
     if (!selectedRoom || !currentUser) return;
-
     try {
       setPendingRequest(true);
 
-      // Add join request to Firebase
       await addDoc(collection(db, 'joinRequests'), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
         roomId: selectedRoom.id,
         roomName: selectedRoom.name,
-        status: 'pending', // pending, approved, rejected
+        status: 'pending',
         createdAt: serverTimestamp(),
       });
 
-      setShowModal(false);
+      setShowJoinModal(false);
       setShowConfirmation(true);
-      setPendingRequest(false);
-    } catch (error) {
-      console.error('Error submitting join request:', error);
-      Alert.alert(
-        t('messagesScreen.error'),
-        t('messagesScreen.failedSendRequest'),
-      );
+    } catch (e) {
+      console.error('Error submitting join request:', e);
+      Alert.alert(t('messagesScreen.error'), t('messagesScreen.failedSendRequest'));
+    } finally {
       setPendingRequest(false);
     }
   };
 
-  // Fetch friends
   const fetchFriends = async () => {
     try {
       if (!currentUser) return;
@@ -424,19 +352,13 @@ export default function Messages({ navigation }: any) {
         where('users', 'array-contains', currentUser.uid),
       );
 
-      const querySnapshot = await getDocs(friendsQuery);
-      const friendsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      setFriends(friendsData);
-    } catch (error) {
-      console.error('Error fetching friends:', error);
+      const qs = await getDocs(friendsQuery);
+      setFriends(qs.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error('Error fetching friends:', e);
     }
   };
 
-  // Fetch friend requests
   const fetchFriendRequests = async () => {
     try {
       if (!currentUser) return;
@@ -457,106 +379,24 @@ export default function Messages({ navigation }: any) {
         getDocs(sentRequestsQuery),
       ]);
 
-      const requestsData = requestsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      const sentData = sentSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const requestsData = requestsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const sentData = sentSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
       setFriendRequests(requestsData);
       setSentRequests(sentData);
       setPendingRequestsCount(requestsData.length);
-    } catch (error) {
-      console.error('Error fetching friend requests:', error);
+    } catch (e) {
+      console.error('Error fetching friend requests:', e);
     }
   };
 
-  // Search users
-  const searchUsers = async (searchTerm: string) => {
-    try {
-      if (!searchTerm.trim()) {
-        setSearchResults([]);
-        return;
-      }
-
-      setLoadingFriends(true);
-      const searchTermLower = searchTerm.toLowerCase();
-
-      // Create separate queries for email, firstName, and lastName
-      const emailQuery = query(
-        collection(db, 'user_data'),
-        where('email', '>=', searchTermLower),
-        where('email', '<=', searchTermLower + '\uf8ff'),
-      );
-
-      const firstNameQuery = query(
-        collection(db, 'user_data'),
-        where('firstName', '>=', searchTermLower),
-        where('firstName', '<=', searchTermLower + '\uf8ff'),
-      );
-
-      const lastNameQuery = query(
-        collection(db, 'user_data'),
-        where('lastName', '>=', searchTermLower),
-        where('lastName', '<=', searchTermLower + '\uf8ff'),
-      );
-
-      // Execute all queries in parallel
-      const [emailSnapshot, firstNameSnapshot, lastNameSnapshot] =
-        await Promise.all([
-          getDocs(emailQuery),
-          getDocs(firstNameQuery),
-          getDocs(lastNameQuery),
-        ]);
-
-      // Combine results and remove duplicates
-      const usersMap = new Map();
-
-      // Add email matches
-      emailSnapshot.docs.forEach(doc => {
-        const user = { id: doc.id, ...doc.data() };
-        usersMap.set(user.id, user);
-      });
-
-      // Add firstName matches
-      firstNameSnapshot.docs.forEach(doc => {
-        const user = { id: doc.id, ...doc.data() };
-        usersMap.set(user.id, user);
-      });
-
-      // Add lastName matches
-      lastNameSnapshot.docs.forEach(doc => {
-        const user = { id: doc.id, ...doc.data() };
-        usersMap.set(user.id, user);
-      });
-
-      // Convert to array and exclude current user
-      const usersData = Array.from(usersMap.values()).filter(
-        user => user.id !== currentUser?.uid,
-      );
-
-      setSearchResults(usersData);
-    } catch (error) {
-      console.error('Error searching users:', error);
-    } finally {
-      setLoadingFriends(false);
-    }
-  };
-
-  // Send friend request
   const sendFriendRequest = async (receiverId: string) => {
     try {
       if (!currentUser) return;
 
       const requestData = {
         senderId: currentUser.uid,
-        senderName: `${currentUser.firstName || ''} ${
-          currentUser.lastName || ''
-        }`.trim(),
+        senderName: `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim(),
         senderEmail: currentUser.email,
         receiverId,
         status: 'pending',
@@ -566,95 +406,77 @@ export default function Messages({ navigation }: any) {
       await addDoc(collection(db, 'friendRequests'), requestData);
       Alert.alert(t('messages.success'), t('messages.friendRequestSent'));
       fetchFriendRequests();
-    } catch (error) {
-      console.error('Error sending friend request:', error);
+    } catch (e) {
+      console.error('Error sending friend request:', e);
       Alert.alert(t('messages.error'), t('messages.failedSendFriendRequest'));
     }
   };
 
-  // Start chat with friend
   const startChatWithFriend = async (friendId: string) => {
     try {
       if (!currentUser) return;
 
-      // Find existing personal chat room between current user and friend
       const chatQuery = query(
         collection(db, 'chatrooms'),
         where('members', 'array-contains', currentUser.uid),
         where('isPersonal', '==', true),
       );
 
-      const querySnapshot = await getDocs(chatQuery);
-      let existingChat = null;
+      const qs = await getDocs(chatQuery);
+      let existingChat: any = null;
 
-      querySnapshot.docs.forEach(doc => {
-        const room = { id: doc.id, ...doc.data() };
-        if (room.members.includes(friendId)) {
-          existingChat = room;
-        }
+      qs.docs.forEach(d => {
+        const room = { id: d.id, ...d.data() };
+        if (room.members.includes(friendId)) existingChat = room;
       });
 
       if (existingChat) {
-        // Navigate to existing chat
         navigation.navigate('ChatRoom', {
           chatId: existingChat.id,
           chatName: existingChat.name,
           chatAvatar: existingChat.avatar,
         });
-      } else {
-        // Create new personal chat room if not found
-        const friendUser = allUsers.find(u => u.id === friendId);
-        const friendName = friendUser
-          ? `${friendUser.firstName || ''} ${friendUser.lastName || ''}`.trim()
-          : 'Friend';
-
-        const chatRoomData = {
-          name: friendName,
-          avatar: '',
-          createdBy: currentUser.uid,
-          members: [currentUser.uid, friendId],
-          admins: [currentUser.uid, friendId],
-          isPublic: false,
-          isPersonal: true,
-          createdAt: serverTimestamp(),
-        };
-
-        const docRef = await addDoc(collection(db, 'chatrooms'), chatRoomData);
-
-        // Navigate to new chat
-        navigation.navigate('ChatRoom', {
-          chatId: docRef.id,
-          chatName: friendName,
-          chatAvatar: '',
-        });
+        return;
       }
-    } catch (error) {
-      console.error('Error starting chat with friend:', error);
+
+      const friendUser = allUsers.find(u => u.id === friendId);
+      const friendName = friendUser ? prettyName(friendUser) : 'Friend';
+
+      const chatRoomData = {
+        name: friendName,
+        avatar: '',
+        createdBy: currentUser.uid,
+        members: [currentUser.uid, friendId],
+        admins: [currentUser.uid, friendId],
+        isPublic: false,
+        isPersonal: true,
+        createdAt: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(collection(db, 'chatrooms'), chatRoomData);
+
+      navigation.navigate('ChatRoom', {
+        chatId: docRef.id,
+        chatName: friendName,
+        chatAvatar: '',
+      });
+    } catch (e) {
+      console.error('Error starting chat with friend:', e);
       Alert.alert(t('messages.error'), t('messages.failedStartChat'));
     }
   };
 
-  // Accept friend request
-  const acceptFriendRequest = async (
-    requestId: string,
-    senderId: string,
-    senderName: string,
-  ) => {
+  const acceptFriendRequest = async (requestId: string, senderId: string, senderName: string) => {
     try {
       if (!currentUser) return;
 
-      // Update request status
-      await updateDoc(doc(db, 'friendRequests', requestId), {
-        status: 'accepted',
-      });
+      await updateDoc(doc(db, 'friendRequests', requestId), { status: 'accepted' });
 
-      // Create friendship
       await addDoc(collection(db, 'friends'), {
         users: [currentUser.uid, senderId],
         createdAt: serverTimestamp(),
       });
 
-      // Create personal chat room with sender's name
       const chatRoomData = {
         name: senderName,
         avatar: '',
@@ -671,365 +493,379 @@ export default function Messages({ navigation }: any) {
       Alert.alert(t('messages.success'), t('messages.friendRequestAccepted'));
       fetchFriends();
       fetchFriendRequests();
-    } catch (error) {
-      console.error('Error accepting friend request:', error);
+    } catch (e) {
+      console.error('Error accepting friend request:', e);
       Alert.alert(t('messages.error'), t('messages.failedAcceptFriendRequest'));
     }
   };
 
-  // Reject friend request
   const rejectFriendRequest = async (requestId: string) => {
     try {
-      await updateDoc(doc(db, 'friendRequests', requestId), {
-        status: 'rejected',
-      });
-
+      await updateDoc(doc(db, 'friendRequests', requestId), { status: 'rejected' });
       Alert.alert(t('messages.success'), t('messages.friendRequestRejected'));
       fetchFriendRequests();
-    } catch (error) {
-      console.error('Error rejecting friend request:', error);
+    } catch (e) {
+      console.error('Error rejecting friend request:', e);
       Alert.alert(t('messages.error'), t('messages.failedRejectFriendRequest'));
     }
   };
 
-  // Submit platform creation request
   const handleCreatePlatform = async () => {
     if (!platformName.trim() || !platformDescription.trim()) {
       Alert.alert(t('messages.error'), t('messages.fillAllFields'));
       return;
     }
-
     if (!currentUser) return;
 
     try {
       setSubmittingPlatform(true);
 
-      const requestData = {
+      await addDoc(collection(db, 'platformRequests'), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
         platformName: platformName.trim(),
         description: platformDescription.trim(),
         status: 'pending',
         createdAt: serverTimestamp(),
-      };
+      });
 
-      await addDoc(collection(db, 'platformRequests'), requestData);
-
-      Alert.alert(
-        'Success',
-        'Your platform creation request has been submitted to the admin',
-      );
+      Alert.alert('Success', 'Your platform creation request has been submitted to the admin');
       setShowCreateModal(false);
       setPlatformName('');
       setPlatformDescription('');
-    } catch (error) {
-      console.error('Error submitting platform request:', error);
+    } catch (e) {
+      console.error('Error submitting platform request:', e);
       Alert.alert(t('messages.error'), t('messages.failedSubmitRequest'));
     } finally {
       setSubmittingPlatform(false);
     }
   };
 
+  // ----- Lists -----
+  const avatarSourceForRoom = (room: any) => {
+    if (room.avatar && typeof room.avatar === 'string' && room.avatar.trim() !== '' && room.avatar.startsWith('http')) {
+      return { uri: room.avatar };
+    }
+    return d_assets.images.appLogo;
+  };
+
+  const filteredUserRooms = useMemo(() => {
+    const list = userChatRooms.filter(room => (activeTab === 'groups' ? !room.isPersonal : room.isPersonal));
+    if (!searchRooms.trim()) return list;
+    const s = searchRooms.toLowerCase();
+    return list.filter(r => (r.name || '').toLowerCase().includes(s));
+  }, [userChatRooms, activeTab, searchRooms]);
+
+  const filteredAvailableRooms = useMemo(() => {
+    const list = chatRooms.filter(room => !userChatRooms.some(r => r.id === room.id));
+    if (!searchRooms.trim()) return list;
+    const s = searchRooms.toLowerCase();
+    return list.filter(r => (r.name || '').toLowerCase().includes(s));
+  }, [chatRooms, userChatRooms, searchRooms]);
+
   const renderRoomItem = ({ item }: any) => {
     const isUserMember = userChatRooms.some(r => r.id === item.id);
-    const statusText = isUserMember
-      ? null
-      : item.isPublic
-      ? t('messages.public')
-      : t('messages.private');
-
-    // Use app icon as fallback if no avatar
-    const avatarSource =
-      item.avatar &&
-      typeof item.avatar === 'string' &&
-      item.avatar.trim() !== '' &&
-      item.avatar.startsWith('http')
-        ? { uri: item.avatar }
-        : d_assets.images.appLogo;
+    const statusText = isUserMember ? null : item.isPublic ? t('messages.public') : t('messages.private');
 
     return (
-      <Pressable style={styles.card} onPress={() => handleOpenChat(item)}>
-        {/* Avatar */}
-        <View style={styles.iconContainer}>
-          <Image
-            source={avatarSource}
-            style={styles.avatar}
-            defaultSource={d_assets.images.appLogo}
-          />
+      <Pressable style={styles.roomCard} onPress={() => handleOpenChat(item)}>
+        <View style={styles.roomAvatarWrap}>
+          <Image source={avatarSourceForRoom(item)} style={styles.roomAvatar} defaultSource={d_assets.images.appLogo} />
           {!isUserMember && !item.isPublic && (
             <View style={styles.lockBadge}>
-              <Icon name="lock-closed" size={12} color="#fff" />
+              <Ionicons name="lock-closed" size={12} color="#fff" />
             </View>
           )}
         </View>
 
-        {/* Chat Info */}
-        <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>{item.name}</Text>
+        <View style={{ flex: 1 }}>
+          <View style={styles.roomTopRow}>
+            <Text style={styles.roomName} numberOfLines={1}>
+              {item.name}
+            </Text>
+
+            {/* Right side: badge / status */}
+            {isUserMember && item.unreadCount > 0 ? (
+              <View style={styles.unreadPill}>
+                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            ) : !isUserMember ? (
+              <View
+                style={[
+                  styles.statusPill,
+                  item.isPublic ? styles.statusPublic : styles.statusPrivate,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    item.isPublic ? { color: '#1E9E52' } : { color: '#C0392B' },
+                  ]}
+                >
+                  {statusText}
+                </Text>
+              </View>
+            ) : (
+              <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
+            )}
+          </View>
+
           <Text
             style={[
               styles.lastMessage,
-              item.unreadCount > 0 && { fontWeight: 'bold', color: '#000' },
+              item.unreadCount > 0 && isUserMember && { fontWeight: '900', color: '#111' },
             ]}
             numberOfLines={1}
           >
-            {item.lastMessage ||
-              item.description ||
-              t('messages.noMessagesYet')}
+            {item.lastMessage || item.description || t('messages.noMessagesYet')}
           </Text>
-        </View>
 
-        {/* Unread Messages Badge or Status */}
-        {isUserMember && item.unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{item.unreadCount}</Text>
+          <View style={styles.roomMetaRow}>
+            <View style={[styles.metaChip, { backgroundColor: '#F2F3F5' }]}>
+              <Ionicons name={item.isPublic ? 'globe-outline' : 'shield-checkmark-outline'} size={13} color="#444" />
+              <Text style={styles.metaChipText}>{item.isPublic ? t('messages.public') : t('messages.private')}</Text>
+            </View>
+
+            <View style={[styles.metaChip, { backgroundColor: 'rgba(46,204,113,0.14)', borderWidth: 1, borderColor: 'rgba(46,204,113,0.25)' }]}>
+              <Ionicons name="people-outline" size={13} color={COLORS.light.primary} />
+              <Text style={[styles.metaChipText, { color: COLORS.light.primary }]}>
+                {(item.members?.length || 0).toString()} members
+              </Text>
+            </View>
           </View>
-        )}
-
-        {/* Status text if not joined */}
-        {!isUserMember && (
-          <Text
-            style={[styles.pendingText, item.isPublic && { color: '#4CAF50' }]}
-          >
-            {statusText}
-          </Text>
-        )}
+        </View>
       </Pressable>
     );
   };
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: 'center', alignItems: 'center' },
-        ]}
-      >
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={COLORS.light.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { flex: 1, backgroundColor: '#fff' }]}>
-      <View style={styless.header1}>
-        <Image source={d_assets.images.appLogo} style={styless.logo} />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-        <View style={styless.headerIcons}>
+      {/* Header like Settings style (clean) */}
+      <View style={styles.headerBar}>
+        <View style={styles.headerLeft}>
+          <Image source={d_assets.images.appLogo} style={styles.headerLogo} />
+          <View>
+            <Text style={styles.headerTitle}>{t('messages.title')}</Text>
+            <Text style={styles.headerSub}>
+              {activeTab === 'groups' ? t('messages.groups') : t('messages.friends')}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerActions}>
           <Tooltip text="Create Platform">
-            <TouchableOpacity onPress={() => setShowCreateModal(true)}>
-              <Icon
-                name="add-circle-outline"
-                size={24}
-                color="#444"
-                style={styless.iconRight}
-              />
+            <TouchableOpacity style={styles.headerIconBtn} onPress={() => setShowCreateModal(true)}>
+              <Ionicons name="add-circle-outline" size={21} color="#111" />
             </TouchableOpacity>
           </Tooltip>
 
-          <Tooltip text="Notifications" >
-            
+          <Tooltip text="Notifications">
+            <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.navigate('Notifications')}>
+              <Ionicons name="notifications-outline" size={21} color="#111" />
+            </TouchableOpacity>
+          </Tooltip>
+
+          <Tooltip text="Requests">
             <TouchableOpacity
-              onPress={() => navigation.navigate('Notifications')}
+              style={styles.headerIconBtn}
+              onPress={() => setShowRequestsModal(true)}
             >
-              <Icon
-                name="notifications-outline"
-                size={24}
-                color="#444"
-                style={styless.iconRight}
-              />
+              <Ionicons name="mail-unread-outline" size={21} color="#111" />
+              {pendingRequestsCount > 0 && (
+                <View style={styles.dotBadge}>
+                  <Text style={styles.dotBadgeText}>{pendingRequestsCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </Tooltip>
 
           <Tooltip text="Add Friends">
             <TouchableOpacity
-              // onPress={() => setShowFriendsModal(true)}
-              style={styless.iconRight}
+              style={styles.headerIconBtn}
+              onPress={() => setShowFriendsModal(true)}
             >
-              <Icon name="person-add-outline" size={24} color="#444" />
+              <Ionicons name="person-add-outline" size={21} color="#111" />
             </TouchableOpacity>
           </Tooltip>
 
           <Tooltip text="Settings">
-            <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-              <Icon name="settings-outline" size={24} color="#444" />
+            <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.navigate('Settings')}>
+              <Ionicons name="settings-outline" size={21} color="#111" />
             </TouchableOpacity>
           </Tooltip>
         </View>
       </View>
 
-      <Text style={styles.title}>{t('messages.title')}</Text>
-
-      {/* Tab Bar */}
-      <View style={styles.tabBar}>
+      {/* Segmented Tabs (settings style) */}
+      <View style={styles.segmentWrap}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'groups' && styles.activeTab]}
+          style={[styles.segmentBtn, activeTab === 'groups' && styles.segmentActive]}
           onPress={() => setActiveTab('groups')}
+          activeOpacity={0.9}
         >
-          <Icon
-            name="people"
-            size={20}
-            color={activeTab === 'groups' ? COLORS.light.primary : '#666'}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'groups' && styles.activeTabText,
-            ]}
-          >
+          <Ionicons name="people" size={18} color={activeTab === 'groups' ? COLORS.light.primary : '#666'} />
+          <Text style={[styles.segmentText, activeTab === 'groups' && styles.segmentTextActive]}>
             {t('messages.groups')}
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
+          style={[styles.segmentBtn, activeTab === 'friends' && styles.segmentActive]}
           onPress={() => setActiveTab('friends')}
+          activeOpacity={0.9}
         >
-          <Icon
-            name="person"
-            size={20}
-            color={activeTab === 'friends' ? COLORS.light.primary : '#666'}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'friends' && styles.activeTabText,
-            ]}
-          >
+          <Ionicons name="person" size={18} color={activeTab === 'friends' ? COLORS.light.primary : '#666'} />
+          <Text style={[styles.segmentText, activeTab === 'friends' && styles.segmentTextActive]}>
             {t('messages.friends')}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Friend Requests Section - Only show in friends tab */}
-      {activeTab === 'friends' && friendRequests.length > 0 && (
-        <>
-          <Text style={styles.subTitle}>{t('messages.friendRequests')}</Text>
-          <FlatList
-            data={friendRequests}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.requestItem}>
-                <Image
-                  source={
-                    item.senderAvatar
-                      ? { uri: item.senderAvatar }
-                      : d_assets.images.appLogo
-                  }
-                  style={styles.userAvatar}
-                  defaultSource={d_assets.images.appLogo}
-                />
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{item.senderName}</Text>
-                  <Text style={styles.userEmail}>{item.senderEmail}</Text>
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
+        <Ionicons name="search-outline" size={18} color="#777" />
+        <TextInput
+          placeholder={activeTab === 'groups' ? 'Search groups...' : 'Search friends chats...'}
+          placeholderTextColor="#999"
+          value={searchRooms}
+          onChangeText={setSearchRooms}
+          style={styles.searchInput}
+        />
+        {!!searchRooms.trim() && (
+          <TouchableOpacity onPress={() => setSearchRooms('')} style={styles.clearBtn}>
+            <Ionicons name="close" size={16} color="#111" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <FlatList
+        data={[{ key: 'content' }]}
+        keyExtractor={i => i.key}
+        renderItem={() => (
+          <View style={{ paddingBottom: 24 }}>
+            {/* Friend Requests */}
+            {activeTab === 'friends' && friendRequests.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <View style={styles.sectionHeadRow}>
+                  <Text style={styles.sectionTitle}>{t('messages.friendRequests')}</Text>
+                  <View style={styles.sectionCountPill}>
+                    <Text style={styles.sectionCountText}>{friendRequests.length}</Text>
+                  </View>
                 </View>
-                <View style={styles.requestActions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: '#4CAF50', marginRight: 8 },
-                    ]}
-                    onPress={() =>
-                      acceptFriendRequest(
-                        item.id,
-                        item.senderId,
-                        item.senderName,
-                      )
-                    }
-                  >
-                    <Text style={styles.actionText}>
-                      {t('messages.accept')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: '#f44336' },
-                    ]}
-                    onPress={() => rejectFriendRequest(item.id)}
-                  >
-                    <Text style={styles.actionText}>
-                      {t('messages.reject')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+
+                {friendRequests.map(req => (
+                  <View key={req.id} style={styles.requestCard}>
+                    <Image
+                      source={req.senderAvatar ? { uri: req.senderAvatar } : d_assets.images.appLogo}
+                      style={styles.userAvatar}
+                      defaultSource={d_assets.images.appLogo}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName} numberOfLines={1}>
+                        {req.senderName}
+                      </Text>
+                      <Text style={styles.userEmail} numberOfLines={1}>
+                        {req.senderEmail}
+                      </Text>
+
+                      <View style={styles.requestBtnRow}>
+                        <TouchableOpacity
+                          style={[styles.smallBtn, styles.smallBtnPrimary]}
+                          onPress={() => acceptFriendRequest(req.id, req.senderId, req.senderName)}
+                        >
+                          <Text style={styles.smallBtnTextPrimary}>{t('messages.accept')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.smallBtn, styles.smallBtnDanger]}
+                          onPress={() => rejectFriendRequest(req.id)}
+                        >
+                          <Text style={styles.smallBtnTextDanger}>{t('messages.reject')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
               </View>
             )}
-            contentContainerStyle={{ paddingBottom: 10 }}
-            scrollEnabled={false}
-          />
-        </>
-      )}
 
-      {/* Your Chat Rooms */}
-      {userChatRooms.filter(room =>
-        activeTab === 'groups' ? !room.isPersonal : room.isPersonal,
-      ).length > 0 && (
-        <>
-          <Text style={styles.subTitle}>
-            {activeTab === 'groups'
-              ? t('messages.yourRooms')
-              : t('messages.friendChats')}
-          </Text>
-          <FlatList
-            data={userChatRooms.filter(room =>
-              activeTab === 'groups' ? !room.isPersonal : room.isPersonal,
+            {/* Your rooms */}
+            {filteredUserRooms.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionTitle}>
+                  {activeTab === 'groups' ? t('messages.yourRooms') : t('messages.friendChats')}
+                </Text>
+
+                {filteredUserRooms.map(room => (
+                  <View key={room.id}>{renderRoomItem({ item: room })}</View>
+                ))}
+              </View>
             )}
-            keyExtractor={item => item.id}
-            renderItem={renderRoomItem}
-            contentContainerStyle={{ paddingBottom: 10 }}
-            scrollEnabled={false}
-          />
-        </>
-      )}
 
-      {/* Available Chat Rooms - Only show for groups tab */}
-      {activeTab === 'groups' && (
-        <>
-          <Text style={styles.subTitle}>{t('messages.availableRooms')}</Text>
-          <FlatList
-            data={chatRooms.filter(
-              room => !userChatRooms.some(r => r.id === room.id),
+            {/* Available rooms */}
+            {activeTab === 'groups' && (
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionTitle}>{t('messages.availableRooms')}</Text>
+
+                {filteredAvailableRooms.length > 0 ? (
+                  filteredAvailableRooms.map(room => (
+                    <View key={room.id}>{renderRoomItem({ item: room })}</View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>{t('messages.noRooms')}</Text>
+                )}
+              </View>
             )}
-            keyExtractor={item => item.id}
-            renderItem={renderRoomItem}
-            contentContainerStyle={{ paddingBottom: 24 }}
-            scrollEnabled={false}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>{t('messages.noRooms')}</Text>
-            }
-          />
-        </>
-      )}
+          </View>
+        )}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 }}
+        showsVerticalScrollIndicator={false}
+      />
 
-      {/* Modal for Join Request */}
-      <Modal transparent visible={showModal} animationType="fade">
+      {/* Join Request Modal (glass-style card) */}
+      <Modal transparent visible={showJoinModal} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('messages.requestTitle')}</Text>
+          <View style={styles.modalCard}>
+            <View style={styles.modalTopRow}>
+              <Text style={styles.modalTitle}>{t('messages.requestTitle')}</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowJoinModal(false)}>
+                <Ionicons name="close" size={18} color="#111" />
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.modalText}>
               {selectedRoom?.hasPendingRequest
                 ? t('messages.alreadyRequested', { name: selectedRoom?.name })
                 : t('messages.requestText', { name: selectedRoom?.name })}
             </Text>
 
-            <View style={styles.modalButtons}>
+            <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setShowModal(false)}
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => setShowJoinModal(false)}
               >
-                <Text style={styles.cancelText}>{t('common.cancel')}</Text>
+                <Text style={styles.modalBtnGhostText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
+
               {!selectedRoom?.hasPendingRequest && (
                 <TouchableOpacity
-                  style={[styles.applyBtn, pendingRequest && { opacity: 0.5 }]}
+                  style={[styles.modalBtn, styles.modalBtnPrimary, pendingRequest && { opacity: 0.6 }]}
                   onPress={handleApplyToJoin}
                   disabled={pendingRequest}
                 >
                   {pendingRequest ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.applyText}>{t('common.apply')}</Text>
+                    <Text style={styles.modalBtnPrimaryText}>{t('common.apply')}</Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -1038,25 +874,23 @@ export default function Messages({ navigation }: any) {
         </View>
       </Modal>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Modal */}
       <Modal transparent visible={showConfirmation} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Icon
-              name="checkmark-circle"
-              size={60}
-              color={COLORS.light.primary}
-              style={{ textAlign: 'center', marginBottom: 10 }}
-            />
-            <Text style={styles.modalTitle}>{t('messages.requestSent')}</Text>
-            <Text style={styles.modalText}>
+          <View style={styles.modalCard}>
+            <View style={{ alignItems: 'center', marginBottom: 10 }}>
+              <Ionicons name="checkmark-circle" size={56} color={COLORS.light.primary} />
+            </View>
+            <Text style={[styles.modalTitle, { textAlign: 'center' }]}>{t('messages.requestSent')}</Text>
+            <Text style={[styles.modalText, { textAlign: 'center' }]}>
               {t('messages.confirmText', { name: selectedRoom?.name })}
             </Text>
+
             <TouchableOpacity
-              style={[styles.applyBtn, { marginTop: 10 }]}
+              style={[styles.modalBtn, styles.modalBtnPrimary, { alignSelf: 'center', minWidth: 140 }]}
               onPress={() => setShowConfirmation(false)}
             >
-              <Text style={styles.applyText}>{t('common.ok')}</Text>
+              <Text style={styles.modalBtnPrimaryText}>{t('common.ok')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1065,54 +899,68 @@ export default function Messages({ navigation }: any) {
       {/* Create Platform Modal */}
       <Modal transparent visible={showCreateModal} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {t('messages.createPlatformRequest')}
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Platform Name"
-              value={platformName}
-              onChangeText={setPlatformName}
-              maxLength={50}
-            />
-
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Description"
-              value={platformDescription}
-              onChangeText={setPlatformDescription}
-              multiline
-              numberOfLines={4}
-              maxLength={200}
-            />
-
-            <View style={styles.modalButtons}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalTopRow}>
+              <Text style={styles.modalTitle}>{t('messages.createPlatformRequest')}</Text>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={styles.modalCloseBtn}
                 onPress={() => {
                   setShowCreateModal(false);
                   setPlatformName('');
                   setPlatformDescription('');
                 }}
               >
-                <Text style={styles.cancelText}>{t('common.cancel')}</Text>
+                <Ionicons name="close" size={18} color="#111" />
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>Platform Name</Text>
+              <TextInput
+                style={styles.textField}
+                placeholder="e.g. Celeone Community"
+                placeholderTextColor="#9A9A9A"
+                value={platformName}
+                onChangeText={setPlatformName}
+                maxLength={50}
+              />
+            </View>
+
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput
+                style={[styles.textField, styles.textArea]}
+                placeholder="Describe your platform..."
+                placeholderTextColor="#9A9A9A"
+                value={platformDescription}
+                onChangeText={setPlatformDescription}
+                multiline
+                numberOfLines={4}
+                maxLength={200}
+              />
+            </View>
+
+            <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                style={[
-                  styles.applyBtn,
-                  submittingPlatform && { opacity: 0.5 },
-                ]}
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => {
+                  setShowCreateModal(false);
+                  setPlatformName('');
+                  setPlatformDescription('');
+                }}
+              >
+                <Text style={styles.modalBtnGhostText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnPrimary, submittingPlatform && { opacity: 0.6 }]}
                 onPress={handleCreatePlatform}
                 disabled={submittingPlatform}
               >
                 {submittingPlatform ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.applyText}>
-                    {t('messages.submitRequest')}
-                  </Text>
+                  <Text style={styles.modalBtnPrimaryText}>{t('messages.submitRequest')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1121,39 +969,41 @@ export default function Messages({ navigation }: any) {
       </Modal>
 
       {/* Requests Modal */}
-      <Modal
-        transparent={false}
-        visible={showRequestsModal}
-        animationType="slide"
-      >
+      <Modal transparent={false} visible={showRequestsModal} animationType="slide">
         <Requests onClose={() => setShowRequestsModal(false)} />
       </Modal>
 
       {/* Friends Modal */}
-      <Modal
-        transparent={false}
-        visible={showFriendsModal}
-        animationType="slide"
-      >
-        <View style={styles.friendsModalContainer}>
-          <View style={styles.friendsHeader}>
-            <TouchableOpacity onPress={() => setShowFriendsModal(false)}>
-              <Icon name="arrow-back" size={24} color="#000" />
+      <Modal transparent={false} visible={showFriendsModal} animationType="slide">
+        <View style={styles.friendsModal}>
+          <View style={styles.friendsTopBar}>
+            <TouchableOpacity style={styles.headerIconBtn} onPress={() => setShowFriendsModal(false)}>
+              <Ionicons name="arrow-back" size={20} color="#111" />
             </TouchableOpacity>
-            <Text style={styles.friendsHeaderTitle}>
-              {t('messages.addFriends')}
-            </Text>
+            <Text style={styles.friendsTitle}>{t('messages.addFriends')}</Text>
+            <View style={{ width: 42 }} />
           </View>
 
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t('messages.searchUsersPlaceholder')}
-            value={userSearch}
-            onChangeText={setUserSearch}
-          />
+          <View style={[styles.searchWrap, { marginTop: 10, marginHorizontal: 16 }]}>
+            <Ionicons name="search-outline" size={18} color="#777" />
+            <TextInput
+              placeholder={t('messages.searchUsersPlaceholder')}
+              placeholderTextColor="#999"
+              value={userSearch}
+              onChangeText={setUserSearch}
+              style={styles.searchInput}
+            />
+            {!!userSearch.trim() && (
+              <TouchableOpacity onPress={() => setUserSearch('')} style={styles.clearBtn}>
+                <Ionicons name="close" size={16} color="#111" />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {loadingFriends && (
-            <ActivityIndicator size="small" color={COLORS.light.primary} />
+            <View style={{ paddingVertical: 10 }}>
+              <ActivityIndicator size="small" color={COLORS.light.primary} />
+            </View>
           )}
 
           <FlatList
@@ -1170,28 +1020,25 @@ export default function Messages({ navigation }: any) {
               );
 
               return (
-                <View style={styles.userItem}>
+                <View style={styles.userCard}>
                   <Image
-                    source={
-                      item.avatar
-                        ? { uri: item.avatar }
-                        : d_assets.images.appLogo
-                    }
+                    source={item.avatar ? { uri: item.avatar } : d_assets.images.appLogo}
                     style={styles.userAvatar}
                     defaultSource={d_assets.images.appLogo}
                   />
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>
-                      {item.firstName || ''} {item.lastName || ''}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userName} numberOfLines={1}>
+                      {prettyName(item) || item.email}
                     </Text>
-                    <Text style={styles.userEmail}>{item.email}</Text>
+                    <Text style={styles.userEmail} numberOfLines={1}>
+                      {item.email}
+                    </Text>
                   </View>
+
                   <TouchableOpacity
                     style={[
-                      styles.actionButton,
-                      (isRequestSent || isFriend) && {
-                        backgroundColor: '#ccc',
-                      },
+                      styles.pillBtn,
+                      (isRequestSent || isFriend) && { backgroundColor: '#E6E7EA' },
                     ]}
                     onPress={() =>
                       isFriend
@@ -1199,8 +1046,14 @@ export default function Messages({ navigation }: any) {
                         : !isRequestSent && sendFriendRequest(item.id)
                     }
                     disabled={isRequestSent}
+                    activeOpacity={0.9}
                   >
-                    <Text style={styles.actionText}>
+                    <Text
+                      style={[
+                        styles.pillBtnText,
+                        (isRequestSent || isFriend) && { color: '#666' },
+                      ]}
+                    >
                       {isFriend
                         ? t('messages.chat')
                         : isRequestSent
@@ -1211,329 +1064,336 @@ export default function Messages({ navigation }: any) {
                 </View>
               );
             }}
-            contentContainerStyle={{ paddingBottom: 20 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, paddingTop: 10 }}
             ListEmptyComponent={
-              !loadingFriends && (
+              !loadingFriends ? (
                 <Text style={styles.noResultsText}>
-                  {userSearch.trim()
-                    ? t('messages.noUsersFound')
-                    : t('messages.noUsersAvailable')}
+                  {userSearch.trim() ? t('messages.noUsersFound') : t('messages.noUsersAvailable')}
                 </Text>
-              )
+              ) : null
             }
+            showsVerticalScrollIndicator={false}
           />
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', justifyContent: 'flex-start' },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    paddingStart: 20,
-    color: COLORS.light.primary,
-    backgroundColor: COLORS.white,
-    padding: 10,
-    elevation: 1,
-  },
-  subTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    paddingStart: 20,
-    marginBottom: 10,
-    marginTop: 15,
-    color: '#333',
-  },
-  card: {
-    backgroundColor: '#fff',
-    elevation: 0.4,
-    padding: 12,
-    marginVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 0.5,
-    borderColor: '#ddd',
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#E6F0FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 25,
-  },
-  lockBadge: {
-    position: 'absolute',
-    bottom: -5,
-    right: -5,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#e74c3c',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chatInfo: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  chatName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  lastMessage: {
-    fontSize: 13,
-    color: '#555',
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: COLORS.light.primary,
-    minWidth: 20,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  pendingText: {
-    fontSize: 12,
-    color: COLORS.light.primary,
-    marginLeft: 8,
-    fontWeight: '500',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    backgroundColor: '#f0f0f0',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 14,
-    marginTop: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    width: '90%',
-    elevation: 3,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: COLORS.light.primary,
-    textAlign: 'center',
-  },
-  modalText: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  cancelBtn: {
-    marginRight: 15,
-    justifyContent: 'center',
-  },
-  cancelText: {
-    fontSize: 15,
-    color: '#999',
-  },
-  applyBtn: {
-    backgroundColor: COLORS.light.primary,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  applyText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  friendsModalContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  friendsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderColor: '#eee',
-    backgroundColor: COLORS.white,
-    elevation: 2,
-  },
-  friendsHeaderTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 16,
-    color: COLORS.light.primary,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 15,
-    margin: 16,
-    borderRadius: 12,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  userItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderColor: '#f0f0f0',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  userAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 16,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-  },
-  actionButton: {
-    backgroundColor: COLORS.light.primary,
+  container: { flex: 1, backgroundColor: '#fff' },
+
+  // Header (settings-like)
+  headerBar: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 100,
+    paddingTop: 10,
+    paddingBottom: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  actionButtonDisabled: {
-    backgroundColor: '#ccc',
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLogo: { width: 38, height: 38, borderRadius: 14 },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: '#111' },
+  headerSub: { marginTop: 3, fontSize: 12.5, fontWeight: '800', color: '#7A7A7A' },
+
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerIconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: '#F2F3F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  actionText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  noResultsText: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 16,
-    marginTop: 40,
-    paddingHorizontal: 20,
-  },
-  infoBadge: {
+  dotBadge: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#e74c3c',
+    top: 6,
+    right: 6,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    justifyContent: 'center',
+    backgroundColor: '#FF3B30',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
     borderWidth: 2,
     borderColor: '#fff',
   },
-  infoBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  tabBar: {
+  dotBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+
+  // Segmented tabs
+  segmentWrap: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  tab: {
+  segmentBtn: {
     flex: 1,
     flexDirection: 'row',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: '#F2F3F5',
+  },
+  segmentActive: {
+    backgroundColor: 'rgba(46,204,113,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(46,204,113,0.30)',
+  },
+  segmentText: { fontSize: 13.5, fontWeight: '900', color: '#666' },
+  segmentTextActive: { color: COLORS.light.primary },
+
+  // Search
+  searchWrap: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    backgroundColor: '#F2F3F5',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  searchInput: { flex: 1, fontSize: 14.5, fontWeight: '700', color: '#111' },
+  clearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Sections
+  sectionBlock: { marginTop: 14 },
+  sectionHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#111' },
+  sectionCountPill: {
+    backgroundColor: 'rgba(46,204,113,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(46,204,113,0.30)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  sectionCountText: { color: COLORS.light.primary, fontWeight: '900' },
+
+  // Room Card (settings-like listing)
+  roomCard: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    marginBottom: 10,
+  },
+  roomAvatarWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#F2F3F5',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  roomAvatar: { width: '100%', height: '100%' },
+  lockBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#C0392B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  roomTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  roomName: { flex: 1, fontSize: 15.5, fontWeight: '900', color: '#111' },
+  lastMessage: { marginTop: 4, fontSize: 13.5, fontWeight: '700', color: '#6A6A6A' },
+
+  unreadPill: {
+    backgroundColor: COLORS.light.primary,
+    minWidth: 26,
+    height: 22,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  unreadText: { color: '#fff', fontSize: 11.5, fontWeight: '900' },
+
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  statusPublic: {
+    backgroundColor: 'rgba(30,158,82,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(30,158,82,0.25)',
+  },
+  statusPrivate: {
+    backgroundColor: 'rgba(192,57,43,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(192,57,43,0.20)',
+  },
+  statusText: { fontSize: 12, fontWeight: '900' },
+
+  roomMetaRow: { marginTop: 10, flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  metaChip: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  metaChipText: { fontSize: 12, fontWeight: '800', color: '#444' },
+
+  emptyText: { textAlign: 'center', color: '#888', fontWeight: '800', paddingVertical: 16 },
+
+  // Friend Request card
+  requestCard: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    marginBottom: 10,
+  },
+  userAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#F2F3F5',
+  },
+  userName: { fontSize: 15.5, fontWeight: '900', color: '#111' },
+  userEmail: { marginTop: 4, fontSize: 13, fontWeight: '700', color: '#6B6B6B' },
+  requestBtnRow: { marginTop: 10, flexDirection: 'row', gap: 10 },
+
+  smallBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  smallBtnPrimary: { backgroundColor: COLORS.light.primary },
+  smallBtnDanger: { backgroundColor: '#FF3B30' },
+  smallBtnTextPrimary: { color: '#fff', fontWeight: '900' },
+  smallBtnTextDanger: { color: '#fff', fontWeight: '900' },
+
+  // Modal (glass-like)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.10,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  modalTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  modalTitle: { fontSize: 16.5, fontWeight: '900', color: '#111' },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: '#F2F3F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalText: { marginTop: 10, fontSize: 13.5, fontWeight: '700', color: '#666', lineHeight: 19 },
+  modalBtnRow: { marginTop: 14, flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
+
+  modalBtn: { borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  modalBtnGhost: { backgroundColor: '#F2F3F5' },
+  modalBtnGhostText: { fontWeight: '900', color: '#111' },
+
+  modalBtnPrimary: { backgroundColor: COLORS.light.primary },
+  modalBtnPrimaryText: { fontWeight: '900', color: '#fff' },
+
+  // Create platform fields
+  formField: { marginTop: 12 },
+  fieldLabel: { fontSize: 12.5, fontWeight: '900', color: '#555', marginBottom: 8 },
+  textField: {
+    backgroundColor: '#F2F3F5',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#111',
+  },
+  textArea: { height: 110, textAlignVertical: 'top' },
+
+  // Friends modal
+  friendsModal: { flex: 1, backgroundColor: '#fff' },
+  friendsTopBar: {
     paddingHorizontal: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  activeTab: {
-    borderBottomColor: COLORS.light.primary,
+  friendsTitle: { fontSize: 16.5, fontWeight: '900', color: '#111' },
+
+  userCard: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    marginBottom: 10,
+    alignItems: 'center',
   },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
-    marginLeft: 8,
+  pillBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(46,204,113,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(46,204,113,0.25)',
   },
-  activeTabText: {
-    color: COLORS.light.primary,
-  },
+  pillBtnText: { color: COLORS.light.primary, fontWeight: '900', fontSize: 12.5 },
+
+  noResultsText: { textAlign: 'center', paddingVertical: 30, color: '#777', fontWeight: '800' },
 });
