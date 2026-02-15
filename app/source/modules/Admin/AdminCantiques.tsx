@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,15 @@ import {
   FlatList,
   Alert,
   TextInput,
-  Modal,
   Platform,
   KeyboardAvoidingView,
-  ScrollView,
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+  ActivityIndicator,
+} from "react-native";
+import Modal from "react-native-modal";
+import Icon from "react-native-vector-icons/Ionicons";
+import { COLORS } from "../../../core/theme/colors";
+import { RichEditor, RichToolbar } from "react-native-pell-rich-editor";
+
 import {
   collection,
   getDocs,
@@ -22,753 +25,911 @@ import {
   getDoc,
   serverTimestamp,
   updateDoc,
-} from 'firebase/firestore';
-import { auth, db } from '../auth/firebaseConfig';
-import { COLORS } from '../../../core/theme/colors';
-import { RichEditor, RichToolbar } from 'react-native-pell-rich-editor';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+  onSnapshot,
+  query,
+  orderBy,
+} from "firebase/firestore";
+import { auth, db } from "../auth/firebaseConfig";
+
+type CantiqueDoc = {
+  id: string;
+  title: string;
+  hymnNumber: number;
+  musicalKey?: string;
+  hymnContent: string;
+  language: string;
+  author?: string;
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+const LANGS = ["All", "goun", "yoruba", "francais", "anglais"] as const;
+
+function safeNum(v: any) {
+  const n = Number(String(v).trim());
+  return Number.isFinite(n) ? n : 0;
+}
 
 export default function AdminCantiques({ navigation }: any) {
-  const [cantiques, setCantiques] = useState<any[]>([]);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
-  const [showLanguageFilter, setShowLanguageFilter] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(
-    'All',
-  );
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredCantiques, setFilteredCantiques] = useState<any[]>([]);
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedCantiques, setSelectedCantiques] = useState<Set<string>>(
-    new Set(),
-  );
-  const [adminName, setAdminName] = useState('');
-  const [editingCantique, setEditingCantique] = useState<any>(null);
-  const richText = useRef<RichEditor>(null);
-  const [richEditorContent, setRichEditorContent] = useState('');
+  const uid = auth.currentUser?.uid;
 
-  interface Cantique {
-    id: string;
-    title: string;
-    hymnNumber: number;
-    musicalKey?: string;
-    hymnContent: string;
-    language: string;
-    createdAt: any;
-  }
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  const [newCantique, setNewCantique] = useState({
-    language: 'goun',
-    title: '',
-    hymnNumber: '',
-    hymnContent: '',
-    musicalKey: '',
+  const [adminName, setAdminName] = useState("Admin");
+
+  const [cantiques, setCantiques] = useState<CantiqueDoc[]>([]);
+
+  // Search / filter
+  const [selectedLanguage, setSelectedLanguage] = useState<(typeof LANGS)[number]>("All");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Select mode
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Sheets
+  const [langFilterOpen, setLangFilterOpen] = useState(false);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  // Editor
+  const richRef = useRef<RichEditor>(null);
+  const [richHTML, setRichHTML] = useState("");
+
+  // Form
+  const [editing, setEditing] = useState<CantiqueDoc | null>(null);
+  const [form, setForm] = useState({
+    language: "goun",
+    title: "",
+    hymnNumber: "",
+    musicalKey: "",
   });
 
+  /* ================= Load admin name ================= */
   useEffect(() => {
-    fetchCantiques();
-    fetchAdminName();
+    (async () => {
+      try {
+        if (!uid) return;
+        const snap = await getDoc(doc(db, "user_data", uid)); // ✅ FIX: use uid, not email
+        if (snap.exists()) {
+          const d: any = snap.data();
+          const nm = `${d.firstName || ""} ${d.lastName || ""}`.trim();
+          if (nm) setAdminName(nm);
+        }
+      } catch {}
+    })();
+  }, [uid]);
+
+  /* ================= Realtime cantiques (premium) ================= */
+  useEffect(() => {
+    const qy = query(collection(db, "cantiques"), orderBy("hymnNumber", "asc"));
+    const unsub = onSnapshot(
+      qy,
+      (snap) => {
+        const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as CantiqueDoc[];
+        // Ensure hymnNumber is numeric (safety)
+        const fixed = arr
+          .map((x) => ({ ...x, hymnNumber: safeNum((x as any).hymnNumber) }))
+          .sort((a, b) => a.hymnNumber - b.hymnNumber);
+        setCantiques(fixed);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("cantiques snapshot error:", err);
+        setLoading(false);
+      }
+    );
+    return () => unsub();
   }, []);
 
-  useEffect(() => {
-    let filtered = cantiques;
-    if (selectedLanguage && selectedLanguage !== 'All') {
-      filtered = filtered.filter(c => c.language === selectedLanguage);
+  const filtered = useMemo(() => {
+    let list = [...cantiques];
+
+    if (selectedLanguage !== "All") {
+      list = list.filter((c) => c.language === selectedLanguage);
     }
-    if (searchQuery) {
-      filtered = filtered.filter(
-        c =>
-          c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.hymnNumber.toString().includes(searchQuery),
-      );
+
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((c) => {
+        const titleMatch = (c.title || "").toLowerCase().includes(q);
+        const numMatch = String(c.hymnNumber || "").includes(q);
+        return titleMatch || numMatch;
+      });
     }
-    setFilteredCantiques(filtered);
+    return list;
   }, [cantiques, selectedLanguage, searchQuery]);
 
-  const fetchCantiques = async () => {
-    const snap = await getDocs(collection(db, 'cantiques'));
-    setCantiques(
-      snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as Cantique))
-        .sort((a, b) => a.hymnNumber - b.hymnNumber),
-    );
-  };
-
-  const fetchAdminName = async () => {
-    const email = auth.currentUser?.email;
-    if (!email) return;
-    const docSnap = await getDoc(doc(db, 'user_data', email));
-    if (docSnap.exists()) {
-      const d = docSnap.data();
-      setAdminName(`${d.firstName} ${d.lastName}`);
-    }
-  };
-
+  /* ================= helpers ================= */
   const resetForm = () => {
-    setNewCantique({
-      language: 'goun',
-      title: '',
-      hymnNumber: '',
-      hymnContent: '',
-      musicalKey: '',
-    });
-    setRichEditorContent('');
+    setForm({ language: "goun", title: "", hymnNumber: "", musicalKey: "" });
+    setRichHTML("");
+    setEditing(null);
   };
 
-  const handleCreateCantique = async () => {
-    if (!newCantique.title?.trim() || !newCantique.hymnNumber?.trim()) {
-      Alert.alert('Validation', 'Title and Hymn Number are required');
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filtered.map((c) => c.id)));
+  };
+
+  const selectAllFrenchVisible = () => {
+    setSelectedIds(new Set(filtered.filter((c) => c.language === "francais").map((c) => c.id)));
+  };
+
+  /* ================= Create ================= */
+  const openCreate = () => {
+    resetForm();
+    setCreateOpen(true);
+  };
+
+  const createCantique = async () => {
+    if (!form.title.trim() || !form.hymnNumber.trim()) {
+      Alert.alert("Validation", "Title and Hymn Number are required");
       return;
     }
 
-    const cantiqueData = {
-      ...newCantique,
-      hymnContent: richEditorContent,
-      author: adminName || 'Admin',
-      createdAt: serverTimestamp(),
-    };
+    const hymnNumber = safeNum(form.hymnNumber);
+    if (!hymnNumber) {
+      Alert.alert("Validation", "Hymn Number must be a valid number");
+      return;
+    }
 
-    await addDoc(collection(db, 'cantiques'), cantiqueData);
-
-    resetForm();
-    setShowCreateForm(false);
-    fetchCantiques();
+    try {
+      setBusy(true);
+      await addDoc(collection(db, "cantiques"), {
+        language: form.language,
+        title: form.title.trim(),
+        hymnNumber,
+        musicalKey: form.musicalKey.trim(),
+        hymnContent: richHTML,
+        author: adminName || "Admin",
+        createdAt: serverTimestamp(),
+      });
+      setCreateOpen(false);
+      resetForm();
+      Alert.alert("Success", "Cantique published");
+    } catch (e) {
+      console.error("create cantique error:", e);
+      Alert.alert("Error", "Failed to publish cantique");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleDeleteCantique = async (id: string) => {
-    Alert.alert('Delete', 'Delete this cantique?', [
-      { text: 'Cancel' },
+  /* ================= Edit ================= */
+  const openEdit = (cantique: CantiqueDoc) => {
+    setEditing(cantique);
+    setForm({
+      language: cantique.language || "goun",
+      title: cantique.title || "",
+      hymnNumber: String(cantique.hymnNumber || ""),
+      musicalKey: cantique.musicalKey || "",
+    });
+    setRichHTML(cantique.hymnContent || "");
+    setEditOpen(true);
+  };
+
+  const updateCantique = async () => {
+    if (!editing) return;
+    if (!form.title.trim() || !form.hymnNumber.trim()) {
+      Alert.alert("Validation", "Title and Hymn Number are required");
+      return;
+    }
+    const hymnNumber = safeNum(form.hymnNumber);
+    if (!hymnNumber) {
+      Alert.alert("Validation", "Hymn Number must be a valid number");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await updateDoc(doc(db, "cantiques", editing.id), {
+        language: form.language,
+        title: form.title.trim(),
+        hymnNumber,
+        musicalKey: form.musicalKey.trim(),
+        hymnContent: richHTML,
+        updatedAt: serverTimestamp(),
+      });
+
+      setEditOpen(false);
+      resetForm();
+      Alert.alert("Success", "Cantique updated");
+    } catch (e) {
+      console.error("update cantique error:", e);
+      Alert.alert("Error", "Failed to update cantique");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* ================= Delete ================= */
+  const deleteCantique = (id: string) => {
+    Alert.alert("Delete", "Delete this cantique?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Delete',
-        style: 'destructive',
+        text: "Delete",
+        style: "destructive",
         onPress: async () => {
-          await deleteDoc(doc(db, 'cantiques', id));
-          fetchCantiques();
+          try {
+            setBusy(true);
+            await deleteDoc(doc(db, "cantiques", id));
+          } catch (e) {
+            console.error("delete cantique error:", e);
+            Alert.alert("Error", "Failed to delete cantique");
+          } finally {
+            setBusy(false);
+          }
         },
       },
     ]);
   };
 
-  const handleEditCantique = (cantique: any) => {
-    setEditingCantique(cantique);
-    setNewCantique({
-      language: cantique.language || 'goun',
-      title: cantique.title || '',
-      hymnNumber: cantique.hymnNumber || '',
-      hymnContent: cantique.hymnContent || '',
-      musicalKey: cantique.musicalKey || '',
-    });
-    setRichEditorContent(cantique.hymnContent || '');
-    setShowEditForm(true);
-  };
+  const bulkDelete = () => {
+    if (selectedIds.size === 0) return;
 
-  const handleUpdateCantique = async () => {
-    if (
-      !editingCantique ||
-      !newCantique.title?.trim() ||
-      !newCantique.hymnNumber?.trim()
-    ) {
-      Alert.alert('Validation', 'Title and Hymn Number are required');
-      return;
-    }
-
-    await updateDoc(doc(db, 'cantiques', editingCantique.id), {
-      ...newCantique,
-      hymnContent: richEditorContent,
-      updatedAt: serverTimestamp(),
-    });
-
-    resetForm();
-    setShowEditForm(false);
-    setEditingCantique(null);
-    fetchCantiques();
-  };
-
-  const handleBulkDelete = async () => {
-    Alert.alert(
-      'Bulk Delete',
-      `Delete ${selectedCantiques.size} selected cantiques?`,
-      [
-        { text: 'Cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const deletePromises = Array.from(selectedCantiques).map(id =>
-              deleteDoc(doc(db, 'cantiques', id)),
-            );
-            await Promise.all(deletePromises);
-            setSelectedCantiques(new Set());
-            setIsSelectMode(false);
-            fetchCantiques();
-          },
+    Alert.alert("Bulk Delete", `Delete ${selectedIds.size} selected cantiques?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setBusy(true);
+            await Promise.all(Array.from(selectedIds).map((id) => deleteDoc(doc(db, "cantiques", id))));
+            setSelectedIds(new Set());
+            setSelectMode(false);
+          } catch (e) {
+            console.error("bulk delete error:", e);
+            Alert.alert("Error", "Failed to delete selected");
+          } finally {
+            setBusy(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
-  const renderCantique = ({ item }: any) => (
-    <TouchableOpacity style={styles.cantiqueCard} onPress={() => {}}>
-      <View style={styles.cantiqueHeader}>
-        <Text style={styles.cantiqueTitle}>{item.title}</Text>
-        <Text style={styles.cantiqueNumber}>{item.hymnNumber}</Text>
-      </View>
-
-      <View style={styles.iconRow}>
-        <Text style={styles.cantiqueKey}>
-          Key: {item.musicalKey || 'Not specified'}
-        </Text>
-        <View style={styles.buttonRow}>
-          <TouchableOpacity onPress={() => handleEditCantique(item)}>
-            <Icon name="create" size={30} color={COLORS.light.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleDeleteCantique(item.id)}>
-            <Icon name="trash" size={30} color="#dc3545" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-    // <TouchableOpacity style={styles.cantiqueCard} onPress={() => {}}>
-    //   <View style={styles.cantiqueHeader}>
-    //     <Text style={styles.cantiqueTitle}>{item.title}</Text>
-    //     <Text style={styles.cantiqueNumber}>{item.hymnNumber}</Text>
-    //   </View>
-    //   <Text style={styles.cantiqueKey}>Key: {item.musicalKey || "Not specified"}</Text>
-
-    // </TouchableOpacity>
-  );
-
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => navigation.goBack()}
-      >
-        <Icon name="arrow-back" size={22} color="#333" />
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Manage Cantiques</Text>
-
-      <View style={styles.filterRow}>
-        <TouchableOpacity
-          style={styles.filterBtn}
-          onPress={() => setShowLanguageFilter(true)}
-        >
-          <Icon name="filter" size={20} color="#666" />
-          <Text style={styles.filterText}>{selectedLanguage}</Text>
+  /* ================= UI ================= */
+  const Header = () => (
+    <View style={styles.hero}>
+      <View style={styles.heroTop}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Icon name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by title or number..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.createBtn}
-          onPress={() => setShowCreateForm(!showCreateForm)}
-        >
-          <Text style={styles.createText}>Create New Cantique</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.createBtn,
-            { backgroundColor: isSelectMode ? '#dc3545' : '#28a745' },
-          ]}
-          onPress={() => {
-            if (isSelectMode) {
-              setIsSelectMode(false);
-              setSelectedCantiques(new Set());
-            } else {
-              setIsSelectMode(true);
-            }
-          }}
-        >
-          <Text style={styles.createText}>
-            {isSelectMode ? 'Cancel Select' : 'Select Mode'}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heroTitle}>Cantiques</Text>
+          <Text style={styles.heroSub} numberOfLines={1}>
+            Manage hymns · {filtered.length} shown
           </Text>
+        </View>
+
+        <TouchableOpacity style={styles.createPill} onPress={openCreate} activeOpacity={0.9}>
+          <Icon name="add" size={18} color="#0E0E10" />
+          <Text style={styles.createPillText}>Create</Text>
         </TouchableOpacity>
       </View>
 
-      {isSelectMode && (
-        <View style={styles.selectActions}>
-          <TouchableOpacity
-            style={styles.selectAllBtn}
-            onPress={() => {
-              const allIds = new Set(filteredCantiques.map(c => c.id));
-              setSelectedCantiques(allIds);
-            }}
-          >
-            <Text style={styles.selectAllText}>Select All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.selectAllBtn}
-            onPress={() => {
-              const frenchIds = new Set(
-                filteredCantiques
-                  .filter(c => c.language === 'francais')
-                  .map(c => c.id),
-              );
-              setSelectedCantiques(frenchIds);
-            }}
-          >
-            <Text style={styles.selectAllText}>Select All French</Text>
-          </TouchableOpacity>
-          {selectedCantiques.size > 0 && (
-            <TouchableOpacity
-              style={styles.bulkDeleteBtn}
-              onPress={handleBulkDelete}
-            >
-              <Text style={styles.bulkDeleteText}>
-                Delete Selected ({selectedCantiques.size})
-              </Text>
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Icon name="search" size={18} color="rgba(255,255,255,0.75)" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search title or number…"
+            placeholderTextColor="rgba(255,255,255,0.6)"
+            style={styles.searchInput}
+          />
+          {!!searchQuery && (
+            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearBtn}>
+              <Icon name="close" size={18} color="#fff" />
             </TouchableOpacity>
           )}
         </View>
-      )}
 
-      {showCreateForm && (
-        <Modal visible animationType="slide" style={{ flex: 1, padding: 16, backgroundColor: '#fff' }} presentationStyle="overFullScreen">
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowCreateForm(false)}
-          >
-            <Ionicons name="close" size={20} color="#666" />
-            <Text style={styles.menuText}>Cancel</Text>
-          </TouchableOpacity>
-          <ScrollView>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-              <View style={styles.form}>
-                {/* LANGUAGE */}
-                <TouchableOpacity
-                  style={styles.inputWithIcon}
-                  onPress={() => setShowLanguagePicker(true)}
-                >
-                  <Icon name="language" size={20} color="#666" />
-                  <Text style={styles.categoryText}>
-                    {newCantique.language}
-                  </Text>
-                </TouchableOpacity>
+        <TouchableOpacity style={styles.filterPill} onPress={() => setLangFilterOpen(true)} activeOpacity={0.9}>
+          <Icon name="filter" size={16} color="#0E0E10" />
+          <Text style={styles.filterPillText}>{selectedLanguage}</Text>
+          <Icon name="chevron-down" size={16} color="#0E0E10" />
+        </TouchableOpacity>
+      </View>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Cantique title"
-                  value={newCantique.title}
-                  onChangeText={t =>
-                    setNewCantique({ ...newCantique, title: t })
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Hymn number"
-                  value={newCantique.hymnNumber}
-                  onChangeText={t =>
-                    setNewCantique({ ...newCantique, hymnNumber: t })
-                  }
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Musical key (optional)"
-                  value={newCantique.musicalKey}
-                  onChangeText={t =>
-                    setNewCantique({ ...newCantique, musicalKey: t })
-                  }
-                />
-                <Text style={styles.label}>Hymn Content (HTML Editor)</Text>
-                <RichToolbar
-                  editor={richText}
-                  actions={['bold', 'italic', 'insertImage', 'fontSize']}
-                  iconMap={{ insertImage: 'image' }}
-                />
-                <RichEditor
-                  ref={richText}
-                  onChange={setRichEditorContent}
-                  placeholder="Enter hymn content..."
-                  initialContentHTML={richEditorContent}
-                  style={styles.richEditor}
-                />
-
-                <TouchableOpacity
-                  style={styles.submitBtn}
-                  onPress={handleCreateCantique}
-                >
-                  <Text style={styles.submitText}>Publish</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </ScrollView>
-        </Modal>
-      )}
-
-      {showEditForm && (
-        <Modal
-         visible
-          animationType="slide"
-          style={{ flex: 1, padding: 16, backgroundColor: '#fff' }}
-          presentationStyle="overFullScreen"
-        >
+      <View style={styles.topActions}>
         <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowEditForm(false)}
-          >
-            <Ionicons name="close" size={20} color="#666" />
-            <Text style={styles.menuText}>Cancel</Text>
-          </TouchableOpacity>
-          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-              <View style={styles.form}>
-                <Text style={styles.editTitle}>Edit Cantique</Text>
+          style={[styles.modeBtn, selectMode && { backgroundColor: "rgba(239,68,68,0.16)" }]}
+          onPress={() => {
+            if (selectMode) {
+              setSelectMode(false);
+              setSelectedIds(new Set());
+            } else {
+              setSelectMode(true);
+            }
+          }}
+        >
+          <Icon name={selectMode ? "close" : "checkbox-outline"} size={16} color="#fff" />
+          <Text style={styles.modeBtnText}>{selectMode ? "Cancel Select" : "Select Mode"}</Text>
+        </TouchableOpacity>
 
-                {/* LANGUAGE */}
-                <TouchableOpacity
-                  style={styles.inputWithIcon}
-                  onPress={() => setShowLanguagePicker(true)}
-                >
-                  <Icon name="language" size={20} color="#666" />
-                  <Text style={styles.categoryText}>
-                    {newCantique.language}
-                  </Text>
-                </TouchableOpacity>
+        {selectMode && (
+          <>
+            <TouchableOpacity style={styles.modeBtn} onPress={selectAllVisible}>
+              <Icon name="checkmark-done-outline" size={16} color="#fff" />
+              <Text style={styles.modeBtnText}>Select All</Text>
+            </TouchableOpacity>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Cantique title"
-                  value={newCantique.title}
-                  onChangeText={t =>
-                    setNewCantique({ ...newCantique, title: t })
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Hymn number"
-                  value={newCantique.hymnNumber}
-                  onChangeText={t =>
-                    setNewCantique({ ...newCantique, hymnNumber: t })
-                  }
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Musical key (optional)"
-                  value={newCantique.musicalKey}
-                  onChangeText={t =>
-                    setNewCantique({ ...newCantique, musicalKey: t })
-                  }
-                />
-                <Text style={styles.label}>Hymn Content (HTML Editor)</Text>
-                <RichToolbar
-                  editor={richText}
-                  actions={['bold', 'italic', 'insertImage', 'fontSize']}
-                  iconMap={{ insertImage: 'image' }}
-                />
-                <RichEditor
-                  ref={richText}
-                  onChange={setRichEditorContent}
-                  placeholder="Enter hymn content..."
-                  initialContentHTML={richEditorContent}
-                  style={styles.richEditor}
-                />
+            <TouchableOpacity style={styles.modeBtn} onPress={selectAllFrenchVisible}>
+              <Icon name="flag-outline" size={16} color="#fff" />
+              <Text style={styles.modeBtnText}>Select French</Text>
+            </TouchableOpacity>
 
-                <View style={styles.editButtons}>
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={() => {
-                      setShowEditForm(false);
-                      resetForm();
-                      setEditingCantique(null);
-                    }}
-                  >
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.submitBtn}
-                    onPress={handleUpdateCantique}
-                  >
-                    <Text style={styles.submitText}>Update</Text>
-                  </TouchableOpacity>
-                </View>
+            {selectedIds.size > 0 && (
+              <TouchableOpacity style={[styles.modeBtn, { backgroundColor: "#EF4444" }]} onPress={bulkDelete}>
+                <Icon name="trash-outline" size={16} color="#fff" />
+                <Text style={styles.modeBtnText}>Delete ({selectedIds.size})</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderItem = ({ item }: { item: CantiqueDoc }) => {
+    const selected = selectedIds.has(item.id);
+    return (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => (selectMode ? toggleSelect(item.id) : openEdit(item))}
+        style={[
+          styles.card,
+          selected && styles.cardSelected,
+        ]}
+      >
+        <View style={styles.cardTop}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{item.hymnNumber}</Text>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <View style={styles.titleRow}>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+
+              <View style={styles.langPill}>
+                <Icon name="language-outline" size={14} color={COLORS.light.primary} />
+                <Text style={styles.langPillText}>{item.language}</Text>
               </View>
-            </KeyboardAvoidingView>
-          </ScrollView>
-        </Modal>
+            </View>
+
+            <View style={styles.metaRow}>
+              <View style={styles.metaChip}>
+                <Icon name="musical-notes-outline" size={14} color="#6B6B70" />
+                <Text style={styles.metaText}>
+                  {item.musicalKey?.trim() ? `Key: ${item.musicalKey}` : "Key: —"}
+                </Text>
+              </View>
+
+              {!!item.author && (
+                <View style={styles.metaChip}>
+                  <Icon name="person-outline" size={14} color="#6B6B70" />
+                  <Text style={styles.metaText}>{item.author}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {!selectMode && (
+            <View style={styles.cardActions}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(item)}>
+                <Icon name="create-outline" size={18} color="#111" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconBtn, { backgroundColor: "rgba(239,68,68,0.12)" }]}
+                onPress={() => deleteCantique(item.id)}
+              >
+                <Icon name="trash-outline" size={18} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {selectMode && (
+            <View style={styles.checkWrap}>
+              <View style={[styles.check, selected && styles.checkOn]}>
+                {selected && <Icon name="checkmark" size={16} color="#fff" />}
+              </View>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#F4F5F7" }}>
+      <Header />
+
+      {loading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={COLORS.light.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(i) => i.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ padding: 14, paddingBottom: 34 }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Icon name="musical-notes-outline" size={34} color="#111" />
+              </View>
+              <Text style={styles.emptyTitle}>No cantiques found</Text>
+              <Text style={styles.emptySub}>Try changing language filter or search.</Text>
+            </View>
+          }
+        />
       )}
 
-      <FlatList
-        data={filteredCantiques}
-        keyExtractor={i => i.id}
-        renderItem={renderCantique}
-        scrollEnabled={false}
-      />
-
-      {/* LANGUAGE MODAL */}
-      <Modal
-        visible={showLanguagePicker}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {['goun', 'yoruba', 'francais', 'anglais'].map(lang => (
-              <TouchableOpacity
-                key={lang}
-                style={styles.modalItem}
-                onPress={() => {
-                  setNewCantique({ ...newCantique, language: lang });
-                  setShowLanguagePicker(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>{lang}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setShowLanguagePicker(false)}>
-              <Text style={styles.modalClose}>Cancel</Text>
+      {/* ===== Language Filter Sheet ===== */}
+      <Modal isVisible={langFilterOpen} onBackdropPress={() => setLangFilterOpen(false)} style={{ margin: 0, justifyContent: "flex-end" }}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetTitle}>Filter language</Text>
+              <Text style={styles.sheetSub}>Choose what to display</Text>
+            </View>
+            <TouchableOpacity onPress={() => setLangFilterOpen(false)} style={styles.sheetClose}>
+              <Icon name="close" size={18} color="#111" />
             </TouchableOpacity>
           </View>
+
+          {LANGS.map((lang) => (
+            <TouchableOpacity
+              key={lang}
+              style={styles.sheetRow}
+              onPress={() => {
+                setSelectedLanguage(lang);
+                setLangFilterOpen(false);
+              }}
+            >
+              <Text style={styles.sheetRowText}>{lang}</Text>
+              {selectedLanguage === lang && <Icon name="checkmark" size={18} color={COLORS.light.primary} />}
+            </TouchableOpacity>
+          ))}
         </View>
       </Modal>
 
-      {/* LANGUAGE FILTER MODAL */}
-      <Modal
-        visible={showLanguageFilter}
-        transparent
-        animationType="fade"
-        presentationStyle="overFullScreen"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {['All', 'goun', 'yoruba', 'francais', 'anglais'].map(lang => (
+      {/* ===== Create Sheet ===== */}
+      <Modal isVisible={createOpen} onBackdropPress={() => !busy && setCreateOpen(false)} style={{ margin: 0, justifyContent: "flex-end" }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={styles.editorSheet}>
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Create Cantique</Text>
+                <Text style={styles.sheetSub}>Publish a new hymn</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCreateOpen(false)} disabled={busy} style={styles.sheetClose}>
+                <Icon name="close" size={18} color="#111" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.langSelect} onPress={() => setLangPickerOpen(true)}>
+              <Icon name="language-outline" size={18} color="#111" />
+              <Text style={styles.langSelectText}>{form.language}</Text>
+              <Icon name="chevron-down" size={18} color="#111" />
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Cantique title *"
+              placeholderTextColor="#8C8C8F"
+              value={form.title}
+              onChangeText={(v) => setForm((p) => ({ ...p, title: v }))}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Hymn number *"
+              placeholderTextColor="#8C8C8F"
+              value={form.hymnNumber}
+              onChangeText={(v) => setForm((p) => ({ ...p, hymnNumber: v }))}
+              keyboardType="numeric"
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Musical key (optional)"
+              placeholderTextColor="#8C8C8F"
+              value={form.musicalKey}
+              onChangeText={(v) => setForm((p) => ({ ...p, musicalKey: v }))}
+            />
+
+            <Text style={styles.label}>Hymn Content (HTML)</Text>
+            <RichToolbar
+              editor={richRef}
+              actions={["bold", "italic", "underline", "heading1", "heading2", "insertBulletsList", "insertOrderedList"]}
+            />
+            <View style={styles.richWrap}>
+              <RichEditor
+                ref={richRef}
+                initialContentHTML={richHTML}
+                onChange={setRichHTML}
+                placeholder="Enter hymn content..."
+                editorStyle={{ backgroundColor: "#fff" }}
+              />
+            </View>
+
+            <View style={styles.sheetBtns}>
               <TouchableOpacity
-                key={lang}
-                style={styles.modalItem}
+                style={[styles.btn, { backgroundColor: "#F2F3F5" }]}
                 onPress={() => {
-                  setSelectedLanguage(lang);
-                  setShowLanguageFilter(false);
+                  if (busy) return;
+                  setCreateOpen(false);
+                  resetForm();
                 }}
               >
-                <Text style={styles.modalItemText}>{lang}</Text>
+                <Text style={[styles.btnText, { color: "#444" }]}>Cancel</Text>
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setShowLanguageFilter(false)}>
-              <Text style={styles.modalClose}>Cancel</Text>
+
+              <TouchableOpacity
+                style={[styles.btn, { backgroundColor: COLORS.light.primary }, busy && { opacity: 0.7 }]}
+                onPress={createCantique}
+                disabled={busy}
+              >
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.btnText, { color: "#fff" }]}>Publish</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ===== Edit Sheet ===== */}
+      <Modal isVisible={editOpen} onBackdropPress={() => !busy && setEditOpen(false)} style={{ margin: 0, justifyContent: "flex-end" }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={styles.editorSheet}>
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Edit Cantique</Text>
+                <Text style={styles.sheetSub}>Update hymn details</Text>
+              </View>
+              <TouchableOpacity onPress={() => setEditOpen(false)} disabled={busy} style={styles.sheetClose}>
+                <Icon name="close" size={18} color="#111" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.langSelect} onPress={() => setLangPickerOpen(true)}>
+              <Icon name="language-outline" size={18} color="#111" />
+              <Text style={styles.langSelectText}>{form.language}</Text>
+              <Icon name="chevron-down" size={18} color="#111" />
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Cantique title *"
+              placeholderTextColor="#8C8C8F"
+              value={form.title}
+              onChangeText={(v) => setForm((p) => ({ ...p, title: v }))}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Hymn number *"
+              placeholderTextColor="#8C8C8F"
+              value={form.hymnNumber}
+              onChangeText={(v) => setForm((p) => ({ ...p, hymnNumber: v }))}
+              keyboardType="numeric"
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Musical key (optional)"
+              placeholderTextColor="#8C8C8F"
+              value={form.musicalKey}
+              onChangeText={(v) => setForm((p) => ({ ...p, musicalKey: v }))}
+            />
+
+            <Text style={styles.label}>Hymn Content (HTML)</Text>
+            <RichToolbar
+              editor={richRef}
+              actions={["bold", "italic", "underline", "heading1", "heading2", "insertBulletsList", "insertOrderedList"]}
+            />
+            <View style={styles.richWrap}>
+              <RichEditor
+                ref={richRef}
+                initialContentHTML={richHTML}
+                onChange={setRichHTML}
+                placeholder="Enter hymn content..."
+                editorStyle={{ backgroundColor: "#fff" }}
+              />
+            </View>
+
+            <View style={styles.sheetBtns}>
+              <TouchableOpacity
+                style={[styles.btn, { backgroundColor: "#F2F3F5" }]}
+                onPress={() => {
+                  if (busy) return;
+                  setEditOpen(false);
+                  resetForm();
+                }}
+              >
+                <Text style={[styles.btnText, { color: "#444" }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btn, { backgroundColor: COLORS.light.primary }, busy && { opacity: 0.7 }]}
+                onPress={updateCantique}
+                disabled={busy}
+              >
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.btnText, { color: "#fff" }]}>Update</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ===== Language Picker Sheet (for form) ===== */}
+      <Modal isVisible={langPickerOpen} onBackdropPress={() => setLangPickerOpen(false)} style={{ margin: 0, justifyContent: "flex-end" }}>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetTitle}>Choose language</Text>
+              <Text style={styles.sheetSub}>Language of the hymn</Text>
+            </View>
+            <TouchableOpacity onPress={() => setLangPickerOpen(false)} style={styles.sheetClose}>
+              <Icon name="close" size={18} color="#111" />
             </TouchableOpacity>
           </View>
+
+          {LANGS.filter((l) => l !== "All").map((lang) => (
+            <TouchableOpacity
+              key={lang}
+              style={styles.sheetRow}
+              onPress={() => {
+                setForm((p) => ({ ...p, language: lang as any }));
+                setLangPickerOpen(false);
+              }}
+            >
+              <Text style={styles.sheetRowText}>{lang}</Text>
+              {form.language === lang && <Icon name="checkmark" size={18} color={COLORS.light.primary} />}
+            </TouchableOpacity>
+          ))}
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
-/* ================= STYLES ================= */
-
 const styles = StyleSheet.create({
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderColor: '#f0f0f0',
+  hero: {
+    backgroundColor: "#0E0E10",
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
+    paddingTop: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 12,
-    color: '#333',
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 12 },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  backText: { marginLeft: 8, color: COLORS.light.primary },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-  createBtn: {
-    backgroundColor: COLORS.light.primary,
+  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "900" },
+  heroSub: { marginTop: 4, color: "rgba(255,255,255,0.7)", fontWeight: "700", fontSize: 12.5 },
+
+  createPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  createPillText: { fontWeight: "900", color: "#0E0E10", fontSize: 13 },
+
+  searchRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  searchBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchInput: { flex: 1, color: "#fff", fontWeight: "800" },
+  clearBtn: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  filterPillText: { fontWeight: "900", color: "#0E0E10" },
+
+  topActions: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  modeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  modeBtnText: { color: "#fff", fontWeight: "900", fontSize: 12.5 },
+
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
     padding: 14,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
     marginBottom: 12,
   },
-  createText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-
-  form: {
-    marginBottom: 20,
-    padding: 18,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  richEditor: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    height: 200,
-    marginBottom: 10,
-  },
-
-  inputWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  categoryText: { marginLeft: 10, fontWeight: '600' },
-
-  submitBtn: { backgroundColor: 'green', padding: 14, borderRadius: 8 },
-  submitText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-
-  cantiqueCard: {
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: '#fafafa',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  cantiqueHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  iconRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cantiqueLanguage: {
-    fontSize: 12,
-    color: COLORS.light.primary,
-    fontWeight: 'bold',
-  },
-  cantiqueAuthor: { fontSize: 12, color: '#888', marginTop: 2 },
-  cantiqueDate: { fontSize: 12, color: '#888' },
-  cantiqueTitle: { fontSize: 18, fontWeight: '600', marginBottom: 6 },
-  cantiqueNumber: {
-    fontSize: 24,
-    color: COLORS.light.primary,
-    fontWeight: '600',
-    paddingLeft: 10,
-  },
-  cantiqueKey: { color: '#555', marginBottom: 10 },
-
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 15,
-    marginTop: 10,
-  },
-
-  editBtn: {
-    backgroundColor: '#007bff',
-    padding: 8,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  deleteBtn: { backgroundColor: '#dc3545', padding: 8, borderRadius: 6 },
-  btnText: { color: '#fff' },
-
-  editTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  editButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  cancelBtn: {
-    backgroundColor: '#6c757d',
-    padding: 14,
-    borderRadius: 8,
-    flex: 1,
-    marginRight: 10,
-  },
-  cancelText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-
-  filterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  filterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    backgroundColor: '#f9f9f9',
-    flex: 1,
-    marginRight: 8,
-  },
-  filterText: { marginLeft: 8, fontWeight: '600' },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 10,
-    borderRadius: 6,
-    flex: 2,
-  },
-
-  selectActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  selectAllBtn: {
-    backgroundColor: '#007bff',
-    padding: 10,
-    borderRadius: 6,
-    flex: 1,
-    marginRight: 8,
-  },
-  selectAllText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-  bulkDeleteBtn: {
-    backgroundColor: '#dc3545',
-    padding: 10,
-    borderRadius: 6,
-    flex: 1,
-  },
-  bulkDeleteText: { color: '#fff', textAlign: 'center', fontWeight: '600' },
-
-  checkboxContainer: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 1,
-  },
-  selectedCard: {
+  cardSelected: {
     borderColor: COLORS.light.primary,
     borderWidth: 2,
-    backgroundColor: '#e8f4fd',
+    backgroundColor: "rgba(47,165,169,0.07)",
+  },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+
+  badge: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: { color: "#fff", fontWeight: "900", fontSize: 18 },
+
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  cardTitle: { flex: 1, fontWeight: "900", color: "#111", fontSize: 15.5 },
+
+  langPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(47,165,169,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  langPillText: { fontWeight: "900", color: COLORS.light.primary, fontSize: 12 },
+
+  metaRow: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F6F7F9",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  metaText: { fontWeight: "800", color: "#6B6B70", fontSize: 12 },
+
+  cardActions: { flexDirection: "row", gap: 10 },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: "#F2F3F5",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  checkWrap: { marginLeft: 6 },
+  check: {
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#D0D2D7",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
   },
-  modalContent: { backgroundColor: '#fff', margin: 40, borderRadius: 10 },
-  modalItem: { padding: 16, borderBottomWidth: 1, borderColor: '#eee' },
-  modalItemText: { textAlign: 'center', fontWeight: '600' },
-  modalClose: { textAlign: 'center', padding: 16, color: 'red' },
+  checkOn: { backgroundColor: COLORS.light.primary, borderColor: COLORS.light.primary },
+
+  empty: { paddingTop: 50, alignItems: "center", paddingHorizontal: 24 },
+  emptyIcon: { width: 70, height: 70, borderRadius: 22, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  emptyTitle: { marginTop: 14, fontWeight: "900", fontSize: 16, color: "#111" },
+  emptySub: { marginTop: 6, fontWeight: "700", color: "#6B6B70", textAlign: "center" },
+
+  // Sheets
+  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: 16 },
+  editorSheet: { backgroundColor: "#fff", borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: 16, maxHeight: "92%" },
+
+  sheetHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEFF2",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sheetTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
+  sheetSub: { marginTop: 4, fontSize: 12.5, fontWeight: "700", color: "#6B6B70" },
+  sheetClose: { width: 40, height: 40, borderRadius: 14, backgroundColor: "#F2F3F5", alignItems: "center", justifyContent: "center" },
+
+  sheetRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F2F3F5",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sheetRowText: { fontWeight: "900", color: "#111", fontSize: 14.5 },
+
+  langSelect: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    backgroundColor: "#F6F7F9",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  langSelectText: { fontWeight: "900", color: "#111" },
+
+  input: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    backgroundColor: "#F6F7F9",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontWeight: "800",
+    color: "#111",
+  },
+  label: { marginTop: 14, marginHorizontal: 16, fontWeight: "900", color: "#111" },
+
+  richWrap: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E8EAEE",
+    height: 220,
+    backgroundColor: "#fff",
+  },
+
+  sheetBtns: { flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingTop: 16 },
+  btn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: "center", justifyContent: "center" },
+  btnText: { fontWeight: "900", fontSize: 14 },
 });

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// PostDetailPro.tsx
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,310 +12,417 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Share,
+  Dimensions,
 } from 'react-native';
-import { useTranslation } from 'react-i18next';
-import Icon from 'react-native-vector-icons/Ionicons';
 import Modal from 'react-native-modal';
 import ImageViewer from 'react-native-image-zoom-viewer';
+import Video from 'react-native-video';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useTranslation } from 'react-i18next';
+
 import { COLORS } from '../../../core/theme/colors';
 import { auth, db } from '../auth/firebaseConfig';
+
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
 import {
   collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  serverTimestamp,
-  updateDoc,
   doc,
+  getDoc,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
   arrayUnion,
   arrayRemove,
-  onSnapshot,
-  getDoc,
-  deleteDoc,
 } from 'firebase/firestore';
 import { d_assets } from '../../configs/assets';
 
-export default function PostDetail({ route, navigation }: any) {
-  const { t } = useTranslation();
-  const { post } = route.params;
+type MediaItem =
+  | { type: 'image'; url: string }
+  | { type: 'video'; url: string; poster?: string };
 
-  const [isImageModalVisible, setImageModalVisible] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isCommentModalVisible, setCommentModalVisible] = useState(false);
-  const [newComment, setNewComment] = useState('');
-  const [showFullText, setShowFullText] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [expandedComments, setExpandedComments] = useState(new Set<string>());
-  const [comments, setComments] = useState<any[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
-  const [postData, setPostData] = useState<any>(post);
+type PostDoc = {
+  id: string;
+  text?: string;
+  title?: string;
+  content?: string;
+
+  originalLang?: string; // e.g. 'fr'
+  translations?: Record<string, string>;
+
+  media?: MediaItem[]; // recommended
+  image?: any; // legacy
+  video?: string; // legacy
+
+  author?: string;
+  posterName?: string;
+  user?: { profileImage?: string };
+
+  createdAt?: any;
+
+  likeCount?: number;
+  likes?: number;
+  commentCount?: number;
+  shareCount?: number;
+
+  likedBy?: string[]; // ✅ for like logic
+
+  shareLink?: string;
+};
+
+type CommentDoc = {
+  id: string;
+  parentId: string | null; // null = root
+  rootId?: string | null; // optional
+  text: string;
+  userId: string;
+  userEmail?: string;
+  userName: string;
+  userProfileImage?: string;
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+type TreeNode = CommentDoc & { children: TreeNode[] };
+
+const { width } = Dimensions.get('window');
+
+function timeAgo(ts: any) {
+  if (!ts) return 'now';
+  const now = new Date();
+  const d = ts.toDate?.() || new Date(ts);
+  const s = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const day = Math.floor(h / 24);
+  if (day < 7) return `${day}d`;
+  const w = Math.floor(day / 7);
+  if (w < 52) return `${w}w`;
+  const y = Math.floor(day / 365);
+  return `${y}y`;
+}
+
+function buildTree(list: CommentDoc[]): TreeNode[] {
+  const map = new Map<string, TreeNode>();
+  list.forEach(c => map.set(c.id, { ...c, children: [] }));
+
+  const roots: TreeNode[] = [];
+  map.forEach(node => {
+    if (!node.parentId) roots.push(node);
+    else {
+      const parent = map.get(node.parentId);
+      if (parent) parent.children.push(node);
+      else roots.push(node); // orphan safety
+    }
+  });
+
+  const sortRec = (arr: TreeNode[]) => {
+    arr.sort((a, b) => {
+      const ad = a.createdAt?.toDate?.()?.getTime?.() || 0;
+      const bd = b.createdAt?.toDate?.()?.getTime?.() || 0;
+      return ad - bd;
+    });
+    arr.forEach(n => sortRec(n.children));
+  };
+  sortRec(roots);
+  return roots;
+}
+
+function detectMedia(post: PostDoc): MediaItem[] {
+  if (Array.isArray(post.media) && post.media.length) return post.media;
+  if (post.video) return [{ type: 'video', url: post.video }];
+
+  const img = (post as any).image;
+  if (typeof img === 'string' && img) return [{ type: 'image', url: img }];
+  if (Array.isArray(img) && img.length) {
+    return img.map((x: any) => ({ type: 'image', url: x?.uri || x }));
+  }
+  return [];
+}
+
+export default function PostDetailPro({ route, navigation }: any) {
+  const { t, i18n } = useTranslation();
+  const { post } = route.params as { post: PostDoc };
+
+  const [postData, setPostData] = useState<PostDoc>({ ...post });
+  const postId = post.id;
+
+  // Translation
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  // Like
   const [isLiked, setIsLiked] = useState(false);
 
-  // State for edit/delete modal
-  const [showCommentMenuModal, setShowCommentMenuModal] = useState(false);
-  const [selectedComment, setSelectedComment] = useState<any>(null);
-  const [editingText, setEditingText] = useState('');
-  const [isEditMode, setIsEditMode] = useState(false);
+  // Media viewer
+  const [imageModal, setImageModal] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
 
-  // Fetch comments from Firebase
+  // Comments
+  const [commentsModal, setCommentsModal] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [flatComments, setFlatComments] = useState<CommentDoc[]>([]);
+  const commentTree = useMemo(() => buildTree(flatComments), [flatComments]);
+
+  // ✅ Replies toggle (auto hidden)
+  const [expandedRoots, setExpandedRoots] = useState<Set<string>>(new Set());
+
+  // Composer
+  const inputRef = useRef<TextInput>(null);
+  const [composerText, setComposerText] = useState('');
+  const [replyTarget, setReplyTarget] = useState<null | { id: string; userName: string }>(null);
+
+  // Actions sheet (edit/delete)
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<CommentDoc | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editText, setEditText] = useState('');
+
+  const currentUser = auth.currentUser;
+  const uid = currentUser?.uid;
+  const email = currentUser?.email || '';
+
+  // ✅ realtime post (keeps likeCount/commentCount fresh + likedBy)
   useEffect(() => {
-    fetchComments();
-    checkIfUserLiked();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.id]);
-
-  const fetchComments = async () => {
-    try {
-      setLoadingComments(true);
-      const commentsQuery = query(collection(db, 'posts', post.id, 'comments'));
-      const unsubscribe = onSnapshot(commentsQuery, async querySnapshot => {
-        const fetchedComments = await Promise.all(
-          querySnapshot.docs.map(async docSnap => {
-            const data = docSnap.data();
-            // Fetch replies for each comment
-            const repliesQuery = query(
-              collection(
-                db,
-                'posts',
-                post.id,
-                'comments',
-                docSnap.id,
-                'replies',
-              ),
-            );
-            const repliesSnapshot = await getDocs(repliesQuery);
-            const replies = repliesSnapshot.docs.map(replyDoc => ({
-              id: replyDoc.id,
-              ...replyDoc.data(),
-            }));
-            return {
-              id: docSnap.id,
-              ...data,
-              replies: replies,
-            };
-          }),
-        );
-        setComments(fetchedComments);
-
-        // Update post data with new comment count
-        const totalComments = fetchedComments.reduce((acc, comment) => {
-          return acc + 1 + (comment.replies?.length || 0);
-        }, 0);
-
-        setPostData((prevData: any) => ({
-          ...prevData,
-          comments: totalComments,
-        }));
-
-        setLoadingComments(false);
-      });
-      return unsubscribe;
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-      setLoadingComments(false);
-    }
-  };
-
-  const checkIfUserLiked = () => {
-    const currentUserEmail = auth.currentUser?.email;
-    if (currentUserEmail && postData.likedBy) {
-      setIsLiked(postData.likedBy.includes(currentUserEmail));
-    }
-  };
-
-  // Handle like/dislike
-  const handleLike = async () => {
-    const currentUserEmail = auth.currentUser?.email;
-    if (!currentUserEmail) {
-      Alert.alert('Error', 'You must be logged in to like posts');
-      return;
-    }
-
-    try {
-      const postRef = doc(db, 'posts', post.id);
-      const likedBy = postData.likedBy || [];
-      const alreadyLiked = likedBy.includes(currentUserEmail);
-
-      if (alreadyLiked) {
-        // Unlike
-        await updateDoc(postRef, {
-          likes: Math.max(0, (postData.likes || 1) - 1),
-          likedBy: arrayRemove(currentUserEmail),
-        });
-        setIsLiked(false);
-      } else {
-        // Like
-        await updateDoc(postRef, {
-          likes: (postData.likes || 0) + 1,
-          likedBy: arrayUnion(currentUserEmail),
-        });
-        setIsLiked(true);
+    const ref = doc(db, 'posts', postId);
+    const unsub = onSnapshot(ref, snap => {
+      if (snap.exists()) {
+        const data = { id: postId, ...(snap.data() as any) } as PostDoc;
+        setPostData(data);
+        const liked = (data.likedBy || []).includes(email);
+        setIsLiked(liked);
       }
-      // Update local state
-      setPostData({
-        ...postData,
-        likes: alreadyLiked
-          ? Math.max(0, (postData.likes || 1) - 1)
-          : (postData.likes || 0) + 1,
+    });
+    return () => unsub();
+  }, [postId, email]);
+
+  // Realtime comments
+  useEffect(() => {
+    const qy = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(
+      qy,
+      snap => {
+        const arr = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as CommentDoc[];
+        setFlatComments(arr);
+        setLoadingComments(false);
+      },
+      err => {
+        console.log('comments listener error:', err);
+        setLoadingComments(false);
+      },
+    );
+    return () => unsub();
+  }, [postId]);
+
+  const media = useMemo(() => detectMedia(postData), [postData]);
+
+  const originalText = useMemo(() => {
+    return postData.text || postData.content || postData.title || '';
+  }, [postData]);
+
+  const userLang = useMemo(() => (i18n.language || 'en').toLowerCase(), [i18n.language]);
+  const normalizedUserLang = useMemo(() => {
+    if (userLang.startsWith('en')) return 'en';
+    if (userLang.startsWith('fr')) return 'fr';
+    if (userLang.startsWith('es')) return 'es';
+    if (userLang.startsWith('yo')) return 'yo';
+    if (userLang.startsWith('gou')) return 'gou';
+    if (userLang.startsWith('fon')) return 'fon';
+    return 'en';
+  }, [userLang]);
+
+  const originLang = postData.originalLang || 'en';
+  const translatedText = postData.translations?.[normalizedUserLang];
+
+  const finalTextToShow = useMemo(() => {
+    if (showOriginal) return originalText;
+    if (originLang === normalizedUserLang) return originalText;
+    return translatedText || originalText;
+  }, [showOriginal, originalText, translatedText, originLang, normalizedUserLang]);
+
+  const canTranslate = useMemo(() => {
+    return !!originalText && originLang !== normalizedUserLang;
+  }, [originalText, originLang, normalizedUserLang]);
+
+  // ✅ accurate comment total: includes replies because replies are also docs in flatComments
+  const totalComments = useMemo(() => flatComments.length, [flatComments.length]);
+
+  // ---- Share
+  const handleShare = async () => {
+    const link = postData.shareLink || `https://celeonetv.com/post/${postId}`;
+    try {
+      await Share.share({
+        message: `${postData.title ? postData.title + '\n\n' : ''}${link}`,
       });
-    } catch (error) {
-      console.error('Error updating like:', error);
-      Alert.alert('Error', 'Failed to update like');
-    }
+      // optional
+      // await updateDoc(doc(db, 'posts', postId), { shareCount: (postData.shareCount || 0) + 1 });
+    } catch {}
   };
 
-  // Add comment to Firebase
-  const addComment = async () => {
-    if (!newComment.trim()) {
-      Alert.alert('Validation', 'Please write a comment');
+  // ✅ Like logic (likedBy + likeCount)
+  const handleLike = async () => {
+    if (!uid || !email) {
+      Alert.alert(t('common.error') || 'Error', t('post.must_login') || 'You must be logged in');
       return;
     }
-
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to comment');
-      return;
-    }
-
     try {
-      // Fetch current user's data using UID (same as settings)
-      const uid = currentUser.uid;
-      const userDoc = await getDoc(doc(db, 'user_data', uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
+      const ref = doc(db, 'posts', postId);
+      const already = (postData.likedBy || []).includes(email);
 
-      // Get exact first and last names
-      const userName = `${userData.firstName || 'User'} ${
-        userData.lastName || ''
-      }`.trim();
-
-      const newCommentObj = {
-        text: newComment,
-        userName: userName,
-        userEmail: currentUser.email,
-        userProfileImage: userData?.profileImage || d_assets.images.appLogo,
-        timestamp: serverTimestamp(),
-        likedBy: [],
-      };
-
-      await addDoc(collection(db, 'posts', post.id, 'comments'), newCommentObj);
-
-      // Update comment count asynchronously - count will update via onSnapshot
-      setNewComment('');
-      setReplyingTo(null);
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      Alert.alert('Error', 'Failed to add comment');
+      if (already) {
+        await updateDoc(ref, {
+          likedBy: arrayRemove(email),
+          likeCount: Math.max(0, (postData.likes || 0) - 1),
+        });
+      } else {
+        await updateDoc(ref, {
+          likedBy: arrayUnion(email),
+          likeCount: (postData.likes || 0) + 1,
+        });
+      }
+    } catch (e) {
+      Alert.alert(t('common.error') || 'Error', t('post.like_failed') || 'Failed to update like');
     }
   };
 
-  // Add reply to comment
-  const addReply = async (commentId: string) => {
-    if (!newComment.trim()) {
-      Alert.alert('Validation', 'Please write a reply');
-      return;
-    }
-
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to reply');
-      return;
-    }
-
+  // ---- Translate request pattern
+  const requestTranslation = async () => {
+    if (!canTranslate) return;
+    if (translatedText) return;
+    setTranslating(true);
     try {
-      // Fetch current user's data using UID (same as settings)
-      const uid = currentUser.uid;
-      const userDoc = await getDoc(doc(db, 'user_data', uid));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-
-      // Get exact first and last names
-      const userName = `${userData.firstName || 'User'} ${
-        userData.lastName || ''
-      }`.trim();
-
-      const newReplyObj = {
-        text: newComment,
-        userName: userName,
-        userEmail: currentUser.email,
-        userProfileImage: userData?.profileImage || d_assets.images.appLogo,
-        timestamp: serverTimestamp(),
-        likedBy: [],
-      };
-
-      await addDoc(
-        collection(db, 'posts', post.id, 'comments', commentId, 'replies'),
-        newReplyObj,
-      );
-
-      // Reply count updates automatically via fetchComments onSnapshot
-      setNewComment('');
-      setReplyingTo(null);
-    } catch (error) {
-      console.error('Error adding reply:', error);
-      Alert.alert('Error', 'Failed to add reply');
-    }
-  };
-
-  // Open comment menu
-  const openCommentMenu = (comment: any) => {
-    setSelectedComment(comment);
-    setEditingText(comment.text);
-    setShowCommentMenuModal(true);
-  };
-
-  // Edit comment
-  const handleEditComment = async () => {
-    if (!editingText.trim()) {
-      Alert.alert('Validation', 'Comment cannot be empty');
-      return;
-    }
-
-    try {
-      const commentRef = doc(
-        db,
-        'posts',
-        post.id,
-        'comments',
-        selectedComment.id,
-      );
-      await updateDoc(commentRef, {
-        text: editingText,
+      await setDoc(doc(db, 'posts', postId, 'translation_requests', normalizedUserLang), {
+        targetLang: normalizedUserLang,
+        sourceLang: originLang,
+        text: originalText,
+        createdAt: serverTimestamp(),
+        requestedBy: uid || null,
       });
-      setShowCommentMenuModal(false);
-      setIsEditMode(false);
-      setSelectedComment(null);
-      Alert.alert('Success', 'Comment updated successfully');
-    } catch (error) {
-      console.error('Error updating comment:', error);
-      Alert.alert('Error', 'Failed to update comment');
+
+      Alert.alert(
+        t('post.translation_requested_title') || 'Translation requested',
+        t('post.translation_requested_body') || 'It will appear automatically in a moment.',
+      );
+    } catch (e) {
+      Alert.alert(t('common.error') || 'Error', t('post.translation_failed') || 'Failed to request translation.');
+    } finally {
+      setTranslating(false);
     }
   };
 
-  // Delete comment
-  const handleDeleteComment = async () => {
+  // ---- comment helpers
+  const ensureUserMeta = async () => {
+    if (!currentUser) throw new Error('no user');
+    const u = currentUser;
+    const userSnap = await getDoc(doc(db, 'user_data', u.uid));
+    const data = userSnap.exists() ? userSnap.data() : {};
+    return {
+      userId: u.uid,
+      userEmail: u.email || '',
+      userName: `${data.firstName || 'User'} ${data.lastName || ''}`.trim(),
+      userProfileImage: data?.profileImage || data?.photoURL || '',
+    };
+  };
+
+  const openComments = () => {
+    setCommentsModal(true);
+    setTimeout(() => inputRef.current?.focus(), 300);
+  };
+
+  const focusReply = (id: string, userName: string) => {
+    setReplyTarget({ id, userName });
+    setCommentsModal(true);
+    setTimeout(() => inputRef.current?.focus(), 350);
+  };
+
+  const cancelReply = () => setReplyTarget(null);
+
+  const submitComment = async () => {
+    if (!composerText.trim()) {
+      Alert.alert(t('post.validation') || 'Validation', t('post.write_comment') || 'Please write a comment');
+      return;
+    }
+    if (!currentUser) {
+      Alert.alert(t('common.error') || 'Error', t('post.must_login') || 'You must be logged in');
+      return;
+    }
+
+    try {
+      const meta = await ensureUserMeta();
+      const parentId = replyTarget?.id || null;
+
+      await addDoc(collection(db, 'posts', postId, 'comments'), {
+        parentId,
+        rootId: parentId ? replyTarget?.id : null,
+        text: composerText.trim(),
+        ...meta,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // optional: keep commentCount in post doc consistent
+      // await updateDoc(doc(db,'posts',postId), { commentCount: (postData.commentCount || 0) + 1 });
+
+      setComposerText('');
+      setReplyTarget(null);
+    } catch (e) {
+      Alert.alert(t('common.error') || 'Error', t('post.comment_failed') || 'Failed to post comment');
+    }
+  };
+
+  const openActions = (item: CommentDoc) => {
+    setEditingItem(item);
+    setEditText(item.text);
+    setEditMode(false);
+    setActionSheetVisible(true);
+  };
+
+  const doEdit = async () => {
+    if (!editingItem) return;
+    if (!editText.trim()) {
+      Alert.alert(t('post.validation') || 'Validation', t('post.comment_empty') || 'Comment cannot be empty');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'posts', postId, 'comments', editingItem.id), {
+        text: editText.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      setActionSheetVisible(false);
+      setEditMode(false);
+      setEditingItem(null);
+    } catch {
+      Alert.alert(t('common.error') || 'Error', t('post.edit_failed') || 'Failed to edit');
+    }
+  };
+
+  const doDelete = async () => {
+    if (!editingItem) return;
     Alert.alert(
-      'Delete Comment',
-      'Are you sure you want to delete this comment?',
+      t('post.delete_title') || 'Delete',
+      t('post.delete_confirm') || 'Delete this comment?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.close') || 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('post.delete') || 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteDoc(
-                doc(db, 'posts', post.id, 'comments', selectedComment.id),
-              );
-              // Update comment count
-              await updateDoc(doc(db, 'posts', post.id), {
-                comments: Math.max(0, (postData.comments || 1) - 1),
-              });
-              setShowCommentMenuModal(false);
-              setSelectedComment(null);
-              Alert.alert('Success', 'Comment deleted successfully');
-            } catch (error) {
-              console.error('Error deleting comment:', error);
-              Alert.alert('Error', 'Failed to delete comment');
+              await deleteDoc(doc(db, 'posts', postId, 'comments', editingItem.id));
+              setActionSheetVisible(false);
+              setEditMode(false);
+              setEditingItem(null);
+            } catch {
+              Alert.alert(t('common.error') || 'Error', t('post.delete_failed') || 'Failed to delete');
             }
           },
         },
@@ -322,918 +430,495 @@ export default function PostDetail({ route, navigation }: any) {
     );
   };
 
-  // Delete reply
-  const handleDeleteReply = async (commentId: string, replyId: string) => {
-    Alert.alert('Delete Reply', 'Are you sure you want to delete this reply?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDoc(
-              doc(
-                db,
-                'posts',
-                post.id,
-                'comments',
-                commentId,
-                'replies',
-                replyId,
-              ),
-            );
-            setShowCommentMenuModal(false);
-            setSelectedComment(null);
-            Alert.alert('Success', 'Reply deleted successfully');
-          } catch (error) {
-            console.error('Error deleting reply:', error);
-            Alert.alert('Error', 'Failed to delete reply');
-          }
-        },
-      },
-    ]);
+  const isOwner = (c: CommentDoc) => c.userId && c.userId === uid;
+
+  // ---- media viewer helper (only images)
+  const imageOnly = useMemo(() => media.filter(m => m.type === 'image') as { type: 'image'; url: string }[], [media]);
+  const zoomImages = useMemo(() => imageOnly.map(m => ({ url: m.url })), [imageOnly]);
+
+  const openImageAt = (idx: number) => {
+    setImageIndex(idx);
+    setImageModal(true);
   };
 
-  const toggleReplies = (commentId: string) => {
-    const newExpanded = new Set(expandedComments);
-    if (newExpanded.has(commentId)) {
-      newExpanded.delete(commentId);
-    } else {
-      newExpanded.add(commentId);
-    }
-    setExpandedComments(newExpanded);
+  // ✅ replies expand/collapse (root only)
+  const toggleReplies = (rootId: string) => {
+    setExpandedRoots(prev => {
+      const n = new Set(prev);
+      if (n.has(rootId)) n.delete(rootId);
+      else n.add(rootId);
+      return n;
+    });
   };
 
-  /* ============= MEDIA RENDERING ============= */
-  const renderMedia = () => {
-    // Handle single image (string)
-    if (typeof postData.image === 'string' && postData.image) {
-      return (
-        <TouchableOpacity onPress={() => setImageModalVisible(true)}>
-          <Image source={{ uri: postData.image }} style={styles.media} />
-        </TouchableOpacity>
-      );
-    }
+  // ---- render comment node
+  const renderNode = (node: TreeNode, depth = 0) => {
+    const padLeft = 14 + Math.min(depth, 6) * 18;
 
-    // Handle array of images
-    if (Array.isArray(postData.image) && postData.image.length > 0) {
-      if (postData.image.length === 1) {
-        return (
-          <TouchableOpacity onPress={() => setImageModalVisible(true)}>
-            <Image source={postData.image[0]} style={styles.media} />
-          </TouchableOpacity>
-        );
-      }
-
-      return (
-        <ScrollView horizontal pagingEnabled>
-          {postData.image.map((img: any, index: number) => (
-            <TouchableOpacity
-              key={index}
-              onPress={() => {
-                setCurrentImageIndex(index);
-                setImageModalVisible(true);
-              }}
-            >
-              <Image source={img} style={styles.media} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      );
-    }
-
-    return null;
-  };
-
-  // Prepare images for zoom viewer
-  const getImagesForZoom = () => {
-    if (typeof postData.image === 'string' && postData.image) {
-      return [{ url: postData.image }];
-    }
-    if (Array.isArray(postData.image)) {
-      return postData.image.map((img: any) => ({
-        url: img.uri || img,
-      }));
-    }
-    return [];
-  };
-
-  const renderComment = (
-    comment: any,
-    isReply = false,
-    isLastReply = false,
-    parentCommentId?: string,
-  ) => {
-    const currentUserEmail = auth.currentUser?.email;
-    const isCommentOwner = comment.userEmail === currentUserEmail;
-
-    // Handler for opening menu for replies
-    const handleReplyMenuPress = () => {
-      if (isReply && parentCommentId) {
-        // For replies, show delete only option
-        Alert.alert(
-          'Delete Reply',
-          'Are you sure you want to delete this reply?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => handleDeleteReply(parentCommentId, comment.id),
-            },
-          ],
-        );
-      } else {
-        // For comments, open the full menu
-        openCommentMenu(comment);
-      }
-    };
+    const isRoot = depth === 0;
+    const hasReplies = (node.children?.length || 0) > 0;
+    const expanded = expandedRoots.has(node.id);
 
     return (
-      <View
-        key={comment.id}
-        style={[styles.commentContainer, isReply && styles.replyContainer]}
-      >
-        {isReply && (
-          <View
-            style={[
-              styles.replyConnector,
-              isLastReply && styles.lastReplyConnector,
-            ]}
+      <View key={node.id} style={{ paddingLeft: padLeft, paddingRight: 14, marginTop: 10 }}>
+        <View style={styles.commentRow}>
+          <Image
+            source={node.userProfileImage ? { uri: node.userProfileImage } : d_assets.images.appLogo}
+            style={styles.cAvatar}
           />
-        )}
-        <Image
-          source={
-            typeof comment.userProfileImage === 'string'
-              ? { uri: comment.userProfileImage }
-              : comment.userProfileImage || d_assets.images.appLogo
-          }
-          style={styles.commentAvatar}
-        />
-        <View style={{ flex: 1 }}>
-          <View style={styles.commentHeaderRow}>
-            <Text style={styles.commentUser}>{comment.userName}</Text>
-            {isCommentOwner && (
-              <TouchableOpacity
-                onPress={handleReplyMenuPress}
-                style={styles.menuIcon}
-              >
-                <Icon name="ellipsis-horizontal" size={16} color="#666" />
+
+          <View style={styles.cBubble}>
+            <View style={styles.cTop}>
+              <Text style={styles.cName} numberOfLines={1}>
+                {node.userName}
+              </Text>
+
+              {isOwner(node) && (
+                <TouchableOpacity onPress={() => openActions(node)} style={styles.cMenuBtn}>
+                  <Icon name="ellipsis-horizontal" size={16} color="#7A7A7A" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={styles.cText}>{node.text}</Text>
+
+            <View style={styles.cMeta}>
+              <Text style={styles.cTime}>{timeAgo(node.createdAt)}</Text>
+
+              <TouchableOpacity onPress={() => focusReply(node.id, node.userName)}>
+                <Text style={styles.cReply}>{t('post.reply') || 'Reply'}</Text>
               </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.commentText}>{comment.text}</Text>
-          <View style={styles.commentActions}>
-            <Text style={styles.commentTimestamp}>
-              {getTimeAgo(comment.timestamp)}
-            </Text>
-            {!isReply && (
-              <TouchableOpacity onPress={() => setReplyingTo(comment.id)}>
-                <Text style={styles.replyText}>Reply</Text>
-              </TouchableOpacity>
-            )}
+
+              {/* ✅ show/hide replies toggle ONLY for root comments */}
+              {isRoot && hasReplies && (
+                <TouchableOpacity onPress={() => toggleReplies(node.id)}>
+                  <Text style={[styles.cReply, { color: '#111' }]}>
+                    {expanded
+                      ? (t('post.hide_replies') || 'Hide replies')
+                      : `${t('post.view_replies') || 'View replies'} (${node.children.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
+
+        {/* ✅ children auto hidden */}
+        {(depth > 0 || expanded) &&
+          node.children?.map(child => renderNode(child, depth + 1))}
       </View>
     );
   };
 
-  /* ============= UI ============= */
+  // ---- Header data
+  const authorName = postData.author || postData.posterName || t('post.unknown') || 'Unknown';
+  const authorAvatar =
+    typeof postData.user?.profileImage === 'string'
+      ? { uri: postData.user.profileImage }
+      : postData.user?.profileImage
+      ? postData.user.profileImage
+      : d_assets.images.appLogo;
+
   return (
-    <ScrollView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={25} color="#000" />
+    <View style={styles.screen}>
+      {/* Luxury top bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+          <Icon name="chevron-back" size={24} color="#0E0E10" />
         </TouchableOpacity>
-        <View style={styles.profileRow}>
-          <Image
-            source={
-              typeof postData.user?.profileImage === 'string'
-                ? { uri: postData.user.profileImage }
-                : postData.user?.profileImage || d_assets.images.appLogo
-            }
-            style={styles.avatar}
-          />
-          <View>
-            <Text style={styles.username}>
-              {postData.author || postData.posterName || 'Unknown'}
-            </Text>
-            <Text style={styles.subInfo}>
-              {postData.createdAt?.toDate?.().toLocaleDateString() ||
-                'recently'}{' '}
-              · 🌍
-            </Text>
-          </View>
-        </View>
+
+        <Text style={styles.topTitle} numberOfLines={1}>
+          {t('post.post') || 'Post'}
+        </Text>
+
+        <TouchableOpacity onPress={handleShare} style={styles.iconBtn}>
+          <Icon name="share-social-outline" size={20} color="#0E0E10" />
+        </TouchableOpacity>
       </View>
 
-      {/* POST CARD */}
-      <View style={styles.facebookCard}>
-        {/* TEXT */}
-        <View style={styles.textContainer}>
-          <Text
-            style={styles.postText}
-            numberOfLines={showFullText ? undefined : 8}
-          >
-            {postData.text || postData.content || postData.title}
-          </Text>
-          {(postData.text || postData.content || postData.title)?.length >
-            250 && (
-            <TouchableOpacity onPress={() => setShowFullText(!showFullText)}>
-              <Text style={styles.readMoreText}>
-                {showFullText ? 'See less' : 'See more'}
+      <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
+        <View style={styles.card}>
+          {/* author row */}
+          <View style={styles.authorRow}>
+            <Image source={authorAvatar as any} style={styles.avatar} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.authorName} numberOfLines={1}>
+                {authorName}
               </Text>
+              <Text style={styles.metaLine}>
+                {(postData.createdAt?.toDate?.()?.toLocaleDateString?.() || t('post.recently') || 'recently')}{' '}
+                · <Text style={{ opacity: 0.9 }}>🌍</Text>
+                {postData.originalLang ? ` · ${postData.originalLang.toUpperCase()}` : ''}
+              </Text>
+            </View>
+
+            {canTranslate && (
+              <TouchableOpacity
+                onPress={() => setShowOriginal(s => !s)}
+                style={[styles.pill, { backgroundColor: showOriginal ? '#111' : '#F2F3F5' }]}
+              >
+                <Icon name="language" size={14} color={showOriginal ? '#fff' : '#111'} />
+                <Text style={[styles.pillText, { color: showOriginal ? '#fff' : '#111' }]}>
+                  {showOriginal ? (t('post.show_translated') || 'Translated') : (t('post.show_original') || 'Original')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* text */}
+          <Text style={styles.postText}>{finalTextToShow}</Text>
+
+          {/* translate CTA when missing */}
+          {canTranslate && !showOriginal && !translatedText && (
+            <TouchableOpacity
+              onPress={requestTranslation}
+              style={[styles.translateBtn, translating && { opacity: 0.7 }]}
+              disabled={translating}
+            >
+              {translating ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Icon name="sparkles-outline" size={16} color="#fff" />
+                  <Text style={styles.translateBtnText}>
+                    {t('post.translate_to') || 'Translate to'} {normalizedUserLang.toUpperCase()}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
-        </View>
 
-        {/* IMAGE */}
-        {renderMedia()}
+          {/* media */}
+          {media.length > 0 && (
+            <View style={{ marginTop: 14 }}>
+              {media[0].type === 'video' ? (
+                <View style={styles.videoWrap}>
+                  <Video
+                    source={{ uri: (media[0] as any).url }}
+                    style={styles.video}
+                    poster={(media[0] as any).poster}
+                    posterResizeMode="cover"
+                    resizeMode="cover"
+                    controls
+                  />
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingLeft: 14 }}>
+                  {imageOnly.map((m, idx) => (
+                    <TouchableOpacity key={idx} onPress={() => openImageAt(idx)} activeOpacity={0.9}>
+                      <Image source={{ uri: m.url }} style={styles.mediaImg} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
 
-        {/* COUNTERS */}
-        <View style={styles.counterRow}>
-          <Text style={styles.counterText}>👍 {postData.likes || 0}</Text>
-          <Text style={styles.counterText}>
-            {postData.comments || 0} comments · {postData.shares || 0} shares
-          </Text>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* ACTIONS */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
-            <Icon
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isLiked ? '#e74c3c' : '#65676B'}
-            />
-            <Text style={[styles.actionText, isLiked && { color: '#e74c3c' }]}>
-              Like
+          {/* metrics */}
+          <View style={styles.metricsRow}>
+            <Text style={styles.metricsText}>❤️ {postData.likes || 0}</Text>
+            <Text style={styles.metricsText}>
+              {totalComments} {t('post.comments') || 'comments'} · {postData.shareCount || 0} {t('post.shares') || 'shares'}
             </Text>
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => setCommentModalVisible(true)}
-          >
-            <Icon name="chatbubble-outline" size={20} color="#65676B" />
-            <Text style={styles.actionText}>Comment</Text>
-          </TouchableOpacity>
+          <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.actionBtn}>
-            <Icon name="share-social-outline" size={20} color="#65676B" />
-            <Text style={styles.actionText}>Share</Text>
-          </TouchableOpacity>
+          {/* actions */}
+          <View style={styles.actionsRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
+              <Icon name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#E74C3C' : '#5B5B5E'} />
+              <Text style={[styles.actionText, isLiked && { color: '#E74C3C' }]}>{t('post.like') || 'Like'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={openComments}>
+              <Icon name="chatbubble-outline" size={20} color="#5B5B5E" />
+              <Text style={styles.actionText}>{t('post.comment') || 'Comment'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
+              <Icon name="share-social-outline" size={20} color="#5B5B5E" />
+              <Text style={styles.actionText}>{t('post.share') || 'Share'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </ScrollView>
 
-      {/* IMAGE ZOOM */}
-      <Modal
-        isVisible={isImageModalVisible}
-        onBackdropPress={() => setImageModalVisible(false)}
-        style={{ margin: 0, backgroundColor: '#000' }}
-      >
-        <ImageViewer
-          imageUrls={getImagesForZoom()}
-          index={currentImageIndex}
-          enableSwipeDown
-          onCancel={() => setImageModalVisible(false)}
-          backgroundColor="#000"
-        />
+      {/* Image zoom viewer */}
+      <Modal isVisible={imageModal} onBackdropPress={() => setImageModal(false)} style={{ margin: 0, backgroundColor: '#000' }}>
+        <ImageViewer imageUrls={zoomImages} index={imageIndex} enableSwipeDown onCancel={() => setImageModal(false)} backgroundColor="#000" />
       </Modal>
 
-      {/* COMMENTS MODAL */}
-      <Modal
-        isVisible={isCommentModalVisible}
-        onBackdropPress={() => setCommentModalVisible(false)}
-        style={{ justifyContent: 'flex-end', margin: 0 }}
-      >
-        <View style={styles.commentModal}>
-          <View style={styles.commentHeader}>
-            <Text style={styles.commentTitle}>
-              Comments (
-              {comments.length +
-                comments.reduce((acc, c) => acc + (c.replies?.length || 0), 0)}
-              )
-            </Text>
-            <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
-              <Icon name="close" size={22} />
+      {/* Comments modal */}
+      <Modal isVisible={commentsModal} onBackdropPress={() => setCommentsModal(false)} style={{ margin: 0, justifyContent: 'flex-end' }}>
+        <View style={styles.commentsSheet}>
+          {/* header */}
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetTitle}>{t('post.comments') || 'Comments'}</Text>
+              <Text style={styles.sheetSub}>
+                {totalComments} {t('post.total') || 'total'}
+              </Text>
+            </View>
+
+            <TouchableOpacity onPress={() => setCommentsModal(false)} style={styles.sheetClose}>
+              <Icon name="close" size={20} color="#111" />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.commentContent}>
+          {/* reply banner */}
+          {!!replyTarget && (
+            <View style={styles.replyBanner}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Icon name="return-down-forward" size={16} color="#111" />
+                <Text style={styles.replyBannerText}>
+                  {t('post.replying_to') || 'Replying to'} <Text style={{ fontWeight: '900' }}>{replyTarget.userName}</Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={cancelReply} style={styles.replyCancel}>
+                <Text style={{ fontWeight: '900', color: '#111' }}>{t('post.cancel') || 'Cancel'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* list */}
+          <View style={{ flex: 1 }}>
             {loadingComments ? (
-              <View style={styles.loadingContainer}>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="large" color={COLORS.light.primary} />
               </View>
-            ) : comments.length === 0 ? (
-              <View style={styles.emptyCommentsContainer}>
-                <Text style={styles.emptyCommentsText}>
-                  No comments yet. Be the first to comment!
+            ) : commentTree.length === 0 ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+                <Text style={{ color: '#777', textAlign: 'center', fontWeight: '700' }}>
+                  {t('post.no_comments') || 'No comments yet. Be the first to comment!'}
                 </Text>
               </View>
             ) : (
-              <ScrollView style={styles.commentList}>
-                {comments.map(comment => (
-                  <View key={comment.id}>
-                    <View style={styles.commentWrapper}>
-                      {renderComment(comment)}
-                      {comment.replies && comment.replies.length > 0 && (
-                        <View style={styles.mainCommentConnector} />
-                      )}
-                    </View>
-                    {expandedComments.has(comment.id) ? (
-                      <>
-                        {comment.replies?.map((reply: any, index: number) =>
-                          renderComment(
-                            reply,
-                            true,
-                            index === (comment.replies?.length || 0) - 1,
-                            comment.id,
-                          ),
-                        )}
-                        <TouchableOpacity
-                          style={styles.hideRepliesBtn}
-                          onPress={() => toggleReplies(comment.id)}
-                        >
-                          <Text style={styles.hideRepliesText}>
-                            Hide replies
-                          </Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      comment.replies &&
-                      comment.replies.length > 0 && (
-                        <TouchableOpacity
-                          style={styles.viewRepliesBtn}
-                          onPress={() => toggleReplies(comment.id)}
-                        >
-                          <Text style={styles.viewRepliesText}>
-                            View {comment.replies.length}{' '}
-                            {comment.replies.length === 1 ? 'reply' : 'replies'}
-                          </Text>
-                        </TouchableOpacity>
-                      )
-                    )}
-                  </View>
-                ))}
+              <ScrollView style={{ flex: 1 }}>
+                {commentTree.map(n => renderNode(n, 0))}
+                <View style={{ height: 14 }} />
               </ScrollView>
             )}
           </View>
 
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-          >
-            <View style={styles.commentInputContainer}>
+          {/* composer */}
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.composer}>
               <TextInput
-                placeholder={
-                  replyingTo ? 'Write a reply...' : 'Write a comment...'
-                }
-                style={styles.commentInput}
-                value={newComment}
-                onChangeText={setNewComment}
+                ref={inputRef}
+                value={composerText}
+                onChangeText={setComposerText}
+                placeholder={replyTarget ? (t('post.write_reply') || 'Write a reply…') : (t('post.write_comment') || 'Write a comment…')}
+                placeholderTextColor="#8C8C8F"
+                style={styles.input}
                 multiline
-                maxLength={500}
-                numberOfLines={4}
+                maxLength={800}
               />
-              <TouchableOpacity
-                style={styles.sendBtn}
-                onPress={() => {
-                  if (replyingTo) {
-                    addReply(replyingTo);
-                  } else {
-                    addComment();
-                  }
-                }}
-              >
-                <Icon name="send" color="#fff" size={18} />
+              <TouchableOpacity style={styles.send} onPress={submitComment} activeOpacity={0.9}>
+                <Icon name="send" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
 
-      {/* COMMENT EDIT/DELETE MODAL */}
+      {/* Actions sheet (edit/delete) */}
       <Modal
-        isVisible={showCommentMenuModal}
+        isVisible={actionSheetVisible}
         onBackdropPress={() => {
-          setShowCommentMenuModal(false);
-          setIsEditMode(false);
+          setActionSheetVisible(false);
+          setEditMode(false);
         }}
-        style={{ justifyContent: 'flex-end', margin: 0 }}
+        style={{ margin: 0, justifyContent: 'flex-end' }}
       >
-        <View style={styles.menuModalContent}>
-          {!isEditMode ? (
+        <View style={styles.actionSheet}>
+          {!editMode ? (
             <>
-              <View style={styles.menuModalHeader}>
-                <Text style={styles.menuModalTitle}>Comment Options</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowCommentMenuModal(false);
-                    setIsEditMode(false);
-                  }}
-                >
-                  <Icon name="close" size={22} />
+              <View style={styles.actionHeader}>
+                <Text style={styles.actionTitle}>{t('post.comment_options') || 'Comment options'}</Text>
+                <TouchableOpacity onPress={() => setActionSheetVisible(false)}>
+                  <Icon name="close" size={20} />
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.menuOption}
-                onPress={() => setIsEditMode(true)}
-              >
+              <TouchableOpacity style={styles.actionRowBtn} onPress={() => setEditMode(true)}>
                 <Icon name="pencil-outline" size={20} color="#007AFF" />
-                <Text style={styles.menuOptionText}>Edit Comment</Text>
+                <Text style={[styles.actionRowText, { color: '#007AFF' }]}>{t('post.edit') || 'Edit'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuOption}
-                onPress={handleDeleteComment}
-              >
+              <TouchableOpacity style={styles.actionRowBtn} onPress={doDelete}>
                 <Icon name="trash-outline" size={20} color="#FF3B30" />
-                <Text style={[styles.menuOptionText, { color: '#FF3B30' }]}>
-                  Delete Comment
-                </Text>
+                <Text style={[styles.actionRowText, { color: '#FF3B30' }]}>{t('post.delete') || 'Delete'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.menuOption}
-                onPress={() => {
-                  setShowCommentMenuModal(false);
-                  setIsEditMode(false);
-                }}
-              >
-                <Text style={[styles.menuOptionText, { color: '#999' }]}>
-                  Cancel
-                </Text>
+              <TouchableOpacity style={[styles.actionRowBtn, { justifyContent: 'center' }]} onPress={() => setActionSheetVisible(false)}>
+                <Text style={[styles.actionRowText, { color: '#999' }]}>{t('post.cancel') || 'Cancel'}</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <View style={styles.menuModalHeader}>
-                <Text style={styles.menuModalTitle}>Edit Comment</Text>
+              <View style={styles.actionHeader}>
+                <Text style={styles.actionTitle}>{t('post.edit_comment') || 'Edit comment'}</Text>
                 <TouchableOpacity
                   onPress={() => {
-                    setIsEditMode(false);
-                    setEditingText(selectedComment?.text || '');
+                    setEditMode(false);
+                    setEditText(editingItem?.text || '');
                   }}
                 >
-                  <Icon name="close" size={22} />
+                  <Icon name="close" size={20} />
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.editInputContainer}>
+              <View style={{ padding: 16 }}>
                 <TextInput
-                  style={styles.editInput}
-                  value={editingText}
-                  onChangeText={setEditingText}
+                  value={editText}
+                  onChangeText={setEditText}
                   multiline
-                  placeholder="Edit your comment..."
+                  style={styles.editInput}
+                  placeholder={t('post.edit_placeholder') || 'Edit your comment…'}
                 />
               </View>
 
-              <View style={styles.editButtonsContainer}>
+              <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 16 }}>
                 <TouchableOpacity
-                  style={styles.cancelEditBtn}
+                  style={[styles.editBtn, { backgroundColor: '#F2F3F5' }]}
                   onPress={() => {
-                    setIsEditMode(false);
-                    setEditingText(selectedComment?.text || '');
+                    setEditMode(false);
+                    setEditText(editingItem?.text || '');
                   }}
                 >
-                  <Text style={styles.cancelEditText}>Cancel</Text>
+                  <Text style={{ fontWeight: '900', color: '#555' }}>{t('post.cancel') || 'Cancel'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.saveEditBtn}
-                  onPress={handleEditComment}
-                >
-                  <Text style={styles.saveEditText}>Save</Text>
+                <TouchableOpacity style={[styles.editBtn, { backgroundColor: COLORS.light.primary }]} onPress={doEdit}>
+                  <Text style={{ fontWeight: '900', color: '#fff' }}>{t('post.save') || 'Save'}</Text>
                 </TouchableOpacity>
               </View>
             </>
           )}
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
-/* ================= STYLES ================= */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F0F2F5',
-    height: '100%',
-  },
+  screen: { flex: 1, backgroundColor: '#F4F5F7' },
 
-  facebookCard: {
-    backgroundColor: '#fafeffff',
-    // marginBottom: 12,
-    paddingTop: 12,
-    flex: 1,
-    // height: '100%',
-    // alignItems: 'space-between',
-    justifyContent: 'space-between',
-  },
-
-  profileRow: {
+  topBar: {
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 6,
-    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECEDEF',
+  },
+  iconBtn: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  topTitle: { flex: 1, textAlign: 'center', fontWeight: '900', fontSize: 16, color: '#0E0E10' },
+
+  card: {
+    marginTop: 14,
+    marginHorizontal: 14,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 2,
   },
 
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    marginRight: 10,
-    objectFit: 'scale-down',
-    borderColor: COLORS.light.primary,
-    borderWidth: 1,
-    padding: 20,
-  },
+  authorRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 10 },
+  avatar: { width: 44, height: 44, borderRadius: 16, backgroundColor: '#F2F3F5' },
+  authorName: { fontWeight: '900', color: '#111', fontSize: 15 },
+  metaLine: { marginTop: 2, fontWeight: '700', fontSize: 12, color: '#75757A' },
 
-  username: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#050505',
-  },
-
-  subInfo: {
-    fontSize: 12,
-    color: '#65676B',
-  },
+  pill: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pillText: { fontWeight: '900', fontSize: 12 },
 
   postText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#050505',
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-
-  media: {
-    width: '100%',
-    height: 380,
-    marginVertical: 8,
-  },
-
-  counterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-
-  counterText: {
-    fontSize: 13,
-    color: '#65676B',
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: '#E4E6EB',
-    marginHorizontal: 16,
-  },
-
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-  },
-
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  actionText: {
-    marginLeft: 6,
-    fontSize: 14,
-    color: '#65676B',
-  },
-
-  /* COMMENTS */
-  commentModal: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '100%',
-    minHeight: '60%',
-    flex: 1,
-    flexDirection: 'column',
-  },
-
-  commentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E4E6EB',
-  },
-
-  commentTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-
-  commentInputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'flex-end',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E4E6EB',
-  },
-
-  commentInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    maxHeight: 100,
-    fontSize: 14,
+    paddingTop: 12,
+    fontSize: 15.5,
+    lineHeight: 22,
+    fontWeight: '600',
+    color: '#121316',
   },
 
-  sendBtn: {
-    backgroundColor: COLORS.light.primary,
-    borderRadius: 20,
-    padding: 12,
-    marginLeft: 10,
+  translateBtn: {
+    marginTop: 12,
+    marginHorizontal: 14,
+    backgroundColor: '#111',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  header: {
+    gap: 8,
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E4E6EB',
   },
+  translateBtnText: { color: '#fff', fontWeight: '900' },
 
-  textContainer: {
-    paddingHorizontal: 5,
-    marginBottom: 10,
-  },
-
-  readMoreText: {
-    fontSize: 14,
-    color: COLORS.light.primary,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-
-  commentList: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-
-  commentContainer: {
-    flexDirection: 'row',
-    marginVertical: 2,
-  },
-
-  replyContainer: {
-    marginLeft: 40,
-  },
-
-  replyConnector: {
-    position: 'absolute',
-    left: 16,
-    top: 0,
-    width: 2,
-    height: 15,
-    backgroundColor: '#ddd',
-  },
-
-  lastReplyConnector: {
-    height: 10,
-  },
-
-  commentAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 20,
+  mediaImg: {
+    width: Math.min(260, width * 1),
+    height: 170,
+    borderRadius: 18,
     marginRight: 12,
-    objectFit: 'scale-down',
-    borderColor: COLORS.light.primary,
-    borderWidth: 1,
-    padding: 20,
+    backgroundColor: '#F2F3F5',
   },
 
-  commentContent: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  videoWrap: { marginHorizontal: 14, borderRadius: 18, overflow: 'hidden', backgroundColor: '#000', height: 220 },
+  video: { width: '100%', height: '100%' },
 
-  commentHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  metricsRow: { marginTop: 14, paddingHorizontal: 14, flexDirection: 'row', justifyContent: 'space-between' },
+  metricsText: { fontWeight: '800', fontSize: 12.5, color: '#6B6B70' },
 
-  commentUser: {
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginBottom: 4,
-  },
+  divider: { height: 1, backgroundColor: '#ECEDEF', marginTop: 12, marginHorizontal: 14 },
 
-  menuIcon: {
-    padding: 5,
-  },
+  actionsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12 },
+  actionText: { fontWeight: '900', color: '#5B5B5E' },
 
-  commentText: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-
-  commentActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  commentTimestamp: {
-    fontSize: 12,
-    color: '#666',
-  },
-
-  replyText: {
-    fontSize: 12,
-    color: COLORS.light.primary,
-    fontWeight: 'bold',
-  },
-
-  commentWrapper: {
-    position: 'relative',
-  },
-
-  mainCommentConnector: {
-    position: 'absolute',
-    left: 20,
-    top: 40,
-    width: 2,
-    height: 20,
-    backgroundColor: '#ddd',
-  },
-
-  viewRepliesBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginLeft: 44,
-  },
-
-  viewRepliesText: {
-    fontSize: 12,
-    color: COLORS.light.primary,
-    fontWeight: 'bold',
-  },
-
-  hideRepliesBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginLeft: 44,
-  },
-
-  hideRepliesText: {
-    fontSize: 12,
-    color: COLORS.light.primary,
-    fontWeight: 'bold',
-  },
-
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  emptyCommentsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-
-  emptyCommentsText: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-  },
-
-  /* EDIT/DELETE MODAL */
-  menuModalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 30,
-  },
-
-  menuModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E4E6EB',
-  },
-
-  menuModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-
-  menuOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  commentsSheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, height: '86%', overflow: 'hidden' },
+  sheetHeader: {
+    paddingHorizontal: 16,
     paddingVertical: 14,
-    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-
-  menuOptionText: {
-    fontSize: 16,
-    marginLeft: 12,
-    color: '#050505',
-  },
-
-  editInputContainer: {
-    padding: 16,
-  },
-
-  editInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    fontSize: 14,
-  },
-
-  editButtonsContainer: {
+    borderBottomColor: '#EEEFF2',
     flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-  },
-
-  cancelEditBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
+  sheetTitle: { fontSize: 18, fontWeight: '900', color: '#111' },
+  sheetSub: { marginTop: 2, fontSize: 12, fontWeight: '800', color: '#777' },
+  sheetClose: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F3F5' },
 
-  cancelEditText: {
-    color: '#666',
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  replyBanner: { backgroundColor: '#F2F3F5', paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  replyBannerText: { fontWeight: '800', color: '#111' },
+  replyCancel: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#fff' },
 
-  saveEditBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.light.primary,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
+  commentRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  cAvatar: { width: 38, height: 38, borderRadius: 14, backgroundColor: '#F2F3F5' },
 
-  saveEditText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  cBubble: { flex: 1, backgroundColor: '#F6F7F9', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
+  cTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  cName: { fontWeight: '900', color: '#111', flex: 1 },
+  cMenuBtn: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cText: { marginTop: 6, fontWeight: '600', color: '#1A1A1D', lineHeight: 20 },
+  cMeta: { marginTop: 8, flexDirection: 'row', gap: 14, alignItems: 'center' },
+  cTime: { fontWeight: '800', fontSize: 12, color: '#777' },
+  cReply: { fontWeight: '900', fontSize: 12, color: COLORS.light.primary },
+
+  composer: { paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#EEEFF2', flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  input: { flex: 1, minHeight: 44, maxHeight: 120, backgroundColor: '#F6F7F9', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, fontWeight: '700', color: '#111' },
+  send: { width: 46, height: 46, borderRadius: 16, backgroundColor: COLORS.light.primary, alignItems: 'center', justifyContent: 'center' },
+
+  actionSheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: 18 },
+  actionHeader: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EEEFF2', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  actionTitle: { fontSize: 16, fontWeight: '900', color: '#111' },
+  actionRowBtn: { paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#F2F3F5' },
+  actionRowText: { fontWeight: '900', fontSize: 15 },
+
+  editInput: { borderWidth: 1, borderColor: '#E6E7EA', borderRadius: 14, padding: 12, minHeight: 90, textAlignVertical: 'top', fontWeight: '700' },
+  editBtn: { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
 });
-
-// Helper function to format time ago
-const getTimeAgo = (timestamp: any): string => {
-  if (!timestamp) return 'now';
-
-  const now = new Date();
-  const commentDate = timestamp.toDate?.() || new Date(timestamp);
-  const diffMs = now.getTime() - commentDate.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffWeeks = Math.floor(diffDays / 7);
-  const diffYears = Math.floor(diffDays / 365);
-
-  if (diffSecs < 60) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffWeeks < 52) return `${diffWeeks}w ago`;
-  return `${diffYears}y ago`;
-};

@@ -27,10 +27,10 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { WebView } from "react-native-webview";
-// import Clipboard from "@react-native-clipboard/clipboard";
+import Clipboard from "@react-native-clipboard/clipboard";
 
 import { COLORS } from "../../../core/theme/colors";
-import styless from "../../../../styles";
+// import styless from "../../../../styles";
 import { d_assets } from "../../configs/assets";
 import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import { db } from "../auth/firebaseConfig";
@@ -38,8 +38,8 @@ import { db } from "../auth/firebaseConfig";
 // If you use another audio library, tell me and I will adapt.
 // yarn add react-native-sound
 // npx pod-install
-// import Sound from "react-native-sound";
-// Sound.setCategory("Playback");
+import Sound from "react-native-sound";
+Sound.setCategory("Playback");
 
 type HymnDoc = {
   id: string;

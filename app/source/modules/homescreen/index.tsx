@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unstable-nested-components */
 // Home.tsx — Premium redesign (same logic/structure, better UI)
 // ✅ Keeps: tabs, search, tags, list rendering per category, likes, refresh, floating action
 // ✅ Adds: premium header + quick chips, better tag badges, premium post cards, consistent spacing, empty state, better media overlays
