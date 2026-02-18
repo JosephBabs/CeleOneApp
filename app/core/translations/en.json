@@ -67,11 +67,155 @@
     "Home": "Home",
     "LeComite": "Committee",
     "Documents": "Documents",
-    "Media": "Media",
+  "Jeunesse": "Youth",
     "Messages": "Messages",
     "Cantiques": "Hymns"
   },
   
+  "jeunesse": {
+    "title": "Youth",
+    "childrenAndYouth": "Children & Youth Activities",
+    "amisDeJesus": "Amis de Jésus (Celestial Church)",
+    "registerChild": "Register a child",
+    "checkResults": "Check concours results",
+    "identifier": "Identifier",
+    "enterIdentifier": "Enter identifier",
+    "search": "Search",
+    "results": "Results",
+    "noResults": "No results found.",
+    "openPhases": "Concours phases",
+    "preselection": "Preselection",
+    "selection": "Selection",
+    "final": "Final Phase (Seme 2024)",
+    "shortlisted": "Shortlisted candidates",
+    "viewList": "View list",
+    "close": "Close",
+
+    "firstName": "First name",
+    "lastName": "Last name",
+    "age": "Age",
+    "currentClass": "Current class",
+    "academicYear": "Academic year",
+    "parishName": "Parish name",
+    "shepherdNames": "Parish shepherd name(s)",
+    "teacherNames": "Main teacher name(s)",
+    "shepherdPhone": "Shepherd phone",
+    "teacherPhone": "Teacher phone",
+    "email": "Main contact email",
+    "country": "Country",
+    "province": "Province",
+    "city": "City",
+    "region": "Region",
+    "subRegion": "Sub-region",
+    "submit": "Submit",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+
+    "weeklyQuiz": "Weekly quiz",
+    "startQuiz": "Start quiz",
+    "timeLeft": "Time left: {{sec}}s",
+    "submitQuiz": "Submit",
+    "score": "Score: {{score}}/{{total}}",
+    "alreadyPlayed": "You already played this quiz.",
+    "quizNotAvailable": "Quiz not available."
+  },
+  "adminJeunesse": {
+    "title": "Admin Jeunesse",
+    "subtitle": "Children registration · concours lists · weekly quizzes",
+    "tabs": {
+      "children": "Children",
+      "concours": "Concours",
+      "quiz": "Quiz"
+    },
+    "children": {
+      "total": "Total children",
+      "addChild": "Add child",
+      "openFilters": "Filters",
+      "emptyTitle": "No children",
+      "emptySub": "Try changing filters or search.",
+      "id": "Identifier",
+      "age": "Age",
+      "class": "Current class",
+      "academicYear": "Academic year",
+      "parish": "Parish name",
+      "shepherd": "Parish shepherd",
+      "teacher": "Main teacher",
+      "phones": "Phones",
+      "email": "Email",
+      "location": "Location",
+      "country": "Country",
+      "province": "Province",
+      "city": "City",
+      "region": "Region",
+      "subRegion": "Sub region",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "generateId": "Generate identifier",
+      "identifierHelp": "Identifier is used to check results",
+      "required": "Please fill required fields"
+    },
+    "concours": {
+      "title": "Concours settings",
+      "year": "Year",
+      "setPeriods": "Set yearly periods",
+      "periodsHelp": "Define start/end dates for each phase (yearly)",
+      "prelim": "Concours Préliminaires",
+      "preselection": "Préselection",
+      "selection": "Selection",
+      "final": "Phase Finale",
+      "start": "Start date (YYYY-MM-DD)",
+      "end": "End date (YYYY-MM-DD)",
+      "candidates": "Candidates list",
+      "pasteHelp": "Paste names (one per line). These will appear online.",
+      "openCandidates": "Manage candidates",
+      "saved": "Saved"
+    },
+    "quiz": {
+      "title": "Weekly quiz settings",
+      "createQuiz": "Create quiz",
+      "question": "Question",
+      "optionA": "Option A",
+      "optionB": "Option B",
+      "optionC": "Option C",
+      "optionD": "Option D",
+      "correct": "Correct option (A/B/C/D)",
+      "durationSec": "Duration (seconds)",
+      "activeFrom": "Active from (YYYY-MM-DD HH:mm)",
+      "activeTo": "Active to (YYYY-MM-DD HH:mm)",
+      "manage": "Manage quiz",
+      "emptyTitle": "No quiz",
+      "emptySub": "Create a weekly quiz to start.",
+      "saved": "Quiz saved"
+    }
+  },
+  "adminSubscriptions": {
+    "title": "Subscriptions",
+    "subtitle": "Assign packages · manage status · view expiry",
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "searchPlaceholder": "Search name or email...",
+    "assign": "Assign package",
+    "package": "Package",
+    "startAt": "Start (ms)",
+    "endAt": "End",
+    "setStatus": "Set status",
+    "saved": "Saved",
+    "noSubs": "No subscriptions found."
+  },
+  "adminPackages": {
+    "title": "Packages",
+    "subtitle": "Create and manage packages",
+    "createPackage": "Create package",
+    "name": "Name",
+    "price": "Price",
+    "durationDays": "Duration (days)",
+    "active": "Active",
+    "confirmDelete": "Delete this package?",
+    "saved": "Saved"
+  },
   "settings": {
     "loading": "Loading...",
     "profile_title": "Profile",
@@ -265,11 +409,21 @@
     "es": "Spanish"
   },
   "common": {
+    "all": "All",
+    "search": "Search",
     "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
     "cancel": "Cancel",
+    "loading": "Loading…",
+    "yes": "Yes",
+    "no": "No",
+    "filter": "Filter",
+    "reset": "Reset",
     "apply": "Apply",
-    "info": "Info",
-    "error": "Error",
+    "create": "Create",
+    "update": "Update",
     "ok": "OK"
   },
   "documents": {
@@ -543,6 +697,54 @@
     "view_replies": "View replies",
     "hide_replies": "Hide replies"
   },
+
+  "chat": {
+    "now": "Now",
+    "typing": "typing…",
+    "members": "{{count}} members",
+    "you": "You",
+    "user": "User",
+    "reply": "Reply",
+    "replyingTo": "Replying to {{name}}",
+    "photo": "Photo",
+    "voiceNote": "Voice note",
+    "file": "File",
+    "media": "Media",
+    "document": "Document",
+    "thisMessageDeleted": "This message was deleted",
+
+    "connecting": "Connecting…",
+    "disconnected": "Disconnected",
+    "loadingOlder": "Loading older messages…",
+    "socketErrorTitle": "Socket error",
+
+    "alertMessageTitle": "Message",
+    "originalNotFound": "Original message not found (maybe deleted / not in local DB).",
+
+    "editFailedTitle": "Edit failed",
+    "sendFailedTitle": "Send failed",
+    "failed": "Failed.",
+    "queuedOffline": "Message queued (offline).",
+
+    "imagesTitle": "Images",
+    "pickImagesFailed": "Pick images failed",
+
+    "filesTitle": "Files",
+    "pickFilesFailed": "Pick files failed",
+
+    "uploadErrorTitle": "Upload error",
+    "uploadFailed": "Upload failed",
+
+    "placeholderMessage": "Message",
+    "placeholderCantWrite": "You can’t write here",
+
+    "attachPhotos": "Photos",
+    "attachFilesDocuments": "Files / Documents",
+
+    "addCaption": "Add a caption…",
+    "photosCount": "{{count}} photo",
+    "photosCount_plural": "{{count}} photos"
+  },
   "postDetail": {
     "title": "Post Details",
     "like": "Like",
@@ -629,6 +831,56 @@
     "admin": "Admin",
     "member": "Member",
     "blocked": "Blocked"
+  },
+
+   "admin": {
+    "dashboard": "Admin Dashboard",
+    "viewDetails": "View details",
+    "loadingDashboard": "Loading dashboard…"
+  },
+  
+ 
+  "adminSubscriptions": {
+    "title": "Subscriptions",
+    "subtitle": "Assign packages and manage user subscriptions",
+    "searchPlaceholder": "Search by name or email...",
+
+    "assign": "Assign Subscription",
+
+    "package": "Package",
+    "endAt": "End date",
+
+    "startAt": "Start timestamp (ms)",
+    "setStatus": "Set status",
+
+    "saved": "Subscription updated successfully",
+
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+
+    "actions": {
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "endNow": "End now"
+    },
+
+    "confirm": {
+      "endTitle": "End subscription",
+      "endMessage": "This will set the subscription end date to now and mark it as expired. Continue?",
+      "activateTitle": "Activate subscription",
+      "activateMessage": "This will activate this subscription. Continue?",
+      "deactivateTitle": "Deactivate subscription",
+      "deactivateMessage": "This will deactivate this subscription. Continue?"
+    },
+
+    "errors": {
+      "selectPackage": "Please select a package",
+      "selectUser": "Please select a user",
+      "generic": "Something went wrong"
+    }
   },
   "groupInfo": {
     "title": "Group Information",

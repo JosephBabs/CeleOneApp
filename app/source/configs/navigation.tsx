@@ -58,6 +58,9 @@ import CreatePlatform from '../modules/messages/CreatePlatform';
 import MediaStream from '../modules/Media';
 import Requests from '../modules/Messages/Requests';
 import { useModal, ModalProvider } from './ModalContext';
+import AdminPackages from '../modules/Admin/AdminPackages';
+import AdminJeunesse from '../modules/Admin/AdminJeunesse';
+import AdminSubscriptions from '../modules/Admin/AdminSubscriptions';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -79,6 +82,9 @@ export type RootStackParamList = {
   AdminDashboard: undefined;
   AdminPosts: undefined;
   AdminUsers: undefined;
+  AdminPackages: undefined;
+  AdminJeunesse: undefined;
+  AdminSubscriptions: undefined;
   AdminChatrooms: undefined;
   AdminPlatformRequests: undefined;
   AdminPendingRequests: undefined;
@@ -197,7 +203,7 @@ export default function AppNavigator() {
 
   //   return null; // This component doesn't render anything
   // };
-  
+
   const handleSelectLanguage = async (lng: string) => {
     await AsyncStorage.setItem('user-language', lng);
     await i18n.changeLanguage(lng);
@@ -248,9 +254,19 @@ export default function AppNavigator() {
               <Stack.Screen name="TvPlayerScreen" component={TvPlayerScreen} />
               <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
               <Stack.Screen name="AdminPosts" component={AdminPosts} />
-              <Stack.Screen name="AdminMusicAndFilms" component={AdminMusicAndFilms} />
+              <Stack.Screen
+                name="AdminMusicAndFilms"
+                component={AdminMusicAndFilms}
+              />
               <Stack.Screen name="AdminUsers" component={AdminUsers} />
               <Stack.Screen name="AdminChatrooms" component={AdminChatrooms} />
+              <Stack.Screen name="AdminJeunesse" component={AdminJeunesse} />
+              <Stack.Screen
+                name="AdminSubscriptions"
+                component={AdminSubscriptions}
+              />
+              <Stack.Screen name="AdminPackages" component={AdminPackages} />
+
               <Stack.Screen
                 name="AdminPendingRequests"
                 component={AdminPendingRequests}

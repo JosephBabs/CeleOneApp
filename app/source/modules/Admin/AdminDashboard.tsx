@@ -13,6 +13,7 @@ import Icon from "react-native-vector-icons/Ionicons";
 import { COLORS } from "../../../core/theme/colors";
 import { auth, db } from "../auth/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
+import { useTranslation } from "react-i18next";
 
 type StatItem = {
   id: string;
@@ -24,6 +25,8 @@ type StatItem = {
 };
 
 export default function AdminDashboard({ navigation }: any) {
+  const { t } = useTranslation();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -38,9 +41,13 @@ export default function AdminDashboard({ navigation }: any) {
     tvChannels: 0,
     filmsAndSongs: 0,
     videos: 0,
+
+    // ✅ new
+    jeunesseChildren: 0,
+    subscriptions: 0,
+    packages: 0,
   });
 
-  /* ================= FETCH COUNTS ================= */
   const fetchCounts = async () => {
     try {
       const [
@@ -53,6 +60,11 @@ export default function AdminDashboard({ navigation }: any) {
         tvSnap,
         songsSnap,
         videosSnap,
+
+        // ✅ new
+        jeunesseSnap,
+        subsSnap,
+        packsSnap,
       ] = await Promise.all([
         getDocs(collection(db, "user_data")),
         getDocs(collection(db, "chatrooms")),
@@ -63,6 +75,11 @@ export default function AdminDashboard({ navigation }: any) {
         getDocs(collection(db, "channels")),
         getDocs(collection(db, "songs")),
         getDocs(collection(db, "videos")),
+
+        // ✅ new collections
+        getDocs(collection(db, "jeunesse_children")),
+        getDocs(collection(db, "user_subscriptions")),
+        getDocs(collection(db, "subscription_packages")),
       ]);
 
       setCounts({
@@ -75,6 +92,10 @@ export default function AdminDashboard({ navigation }: any) {
         tvChannels: tvSnap.size,
         filmsAndSongs: songsSnap.size,
         videos: videosSnap.size,
+
+        jeunesseChildren: jeunesseSnap.size,
+        subscriptions: subsSnap.size,
+        packages: packsSnap.size,
       });
 
       setLastUpdated(new Date());
@@ -101,112 +122,69 @@ export default function AdminDashboard({ navigation }: any) {
     return (counts.filmsAndSongs || 0) + (counts.videos || 0);
   }, [counts.filmsAndSongs, counts.videos]);
 
-  /* ================= DASHBOARD CARDS ================= */
   const stats: StatItem[] = [
+    { id: "1", label: "Users", value: counts.users, icon: "people-outline", route: "AdminUsers", tint: "#3B82F6" },
+    { id: "2", label: "Chatrooms", value: counts.chatrooms, icon: "chatbubbles-outline", route: "AdminChatrooms", tint: "#8B5CF6" },
+    { id: "3", label: "Posts", value: counts.posts, icon: "newspaper-outline", route: "AdminPosts", tint: "#10B981" },
+    { id: "4", label: "Pending Requests", value: counts.pendingRequests, icon: "time-outline", route: "AdminPendingRequests", tint: "#F59E0B" },
+    { id: "5", label: "Platform Requests", value: counts.platformRequests, icon: "layers-outline", route: "AdminPlatformRequests", tint: "#EF4444" },
+    { id: "6", label: "Cantiques", value: counts.cantiques, icon: "musical-notes-outline", route: "AdminCantiques", tint: "#06B6D4" },
+    { id: "7", label: "TV Channels", value: counts.tvChannels, icon: "tv-outline", route: "AdminTVChannels", tint: "#0EA5E9" },
+    { id: "8", label: "Films & Songs", value: totalMedia, icon: "film-outline", route: "AdminMusicAndFilms", tint: COLORS.light.primary || "#008080" },
+
+    // ✅ new cards
     {
-      id: "1",
-      label: "Users",
-      value: counts.users,
-      icon: "people-outline",
-      route: "AdminUsers",
-      tint: "#3B82F6",
+      id: "9",
+      label: t("adminJeunesse.title"),
+      value: counts.jeunesseChildren,
+      icon: "school-outline",
+      route: "AdminJeunesse",
+      tint: "#2FA5A9",
     },
     {
-      id: "2",
-      label: "Chatrooms",
-      value: counts.chatrooms,
-      icon: "chatbubbles-outline",
-      route: "AdminChatrooms",
-      tint: "#8B5CF6",
+      id: "10",
+      label: t("adminSubscriptions.title"),
+      value: counts.subscriptions,
+      icon: "card-outline",
+      route: "AdminSubscriptions",
+      tint: "#111827",
     },
     {
-      id: "3",
-      label: "Posts",
-      value: counts.posts,
-      icon: "newspaper-outline",
-      route: "AdminPosts",
-      tint: "#10B981",
-    },
-    {
-      id: "4",
-      label: "Pending Requests",
-      value: counts.pendingRequests,
-      icon: "time-outline",
-      route: "AdminPendingRequests",
-      tint: "#F59E0B",
-    },
-    {
-      id: "5",
-      label: "Platform Requests",
-      value: counts.platformRequests,
-      icon: "layers-outline",
-      route: "AdminPlatformRequests",
-      tint: "#EF4444",
-    },
-    {
-      id: "6",
-      label: "Cantiques",
-      value: counts.cantiques,
-      icon: "musical-notes-outline",
-      route: "AdminCantiques",
-      tint: "#06B6D4",
-    },
-    {
-      id: "7",
-      label: "TV Channels",
-      value: counts.tvChannels,
-      icon: "tv-outline",
-      route: "AdminTVChannels",
-      tint: "#0EA5E9",
-    },
-    {
-      id: "8",
-      label: "Films & Songs",
-      value: totalMedia,
-      icon: "film-outline",
-      route: "AdminMusicAndFilms",
-      tint: COLORS.light.primary || "#008080",
+      id: "11",
+      label: t("adminPackages.title"),
+      value: counts.packages,
+      icon: "pricetags-outline",
+      route: "AdminPackages",
+      tint: "#7C3AED",
     },
   ];
 
   const renderCard = ({ item }: { item: StatItem }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.9}
-      onPress={() => navigation.navigate(item.route)}
-    >
+    <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={() => navigation.navigate(item.route)}>
       <View style={[styles.cardTop]}>
         <View style={[styles.iconPill, { backgroundColor: `${item.tint}1A` }]}>
           <Icon name={item.icon} size={22} color={item.tint} />
         </View>
-
         <Icon name="chevron-forward" size={18} color="#B8B8BC" />
       </View>
 
       <Text style={styles.value}>{item.value}</Text>
-      <Text style={styles.label} numberOfLines={1}>
-        {item.label}
-      </Text>
+      <Text style={styles.label} numberOfLines={1}>{item.label}</Text>
 
       <View style={[styles.footerPill, { backgroundColor: `${item.tint}12` }]}>
         <View style={[styles.dot, { backgroundColor: item.tint }]} />
-        <Text style={[styles.footerPillText, { color: item.tint }]}>
-          View details
-        </Text>
+        <Text style={[styles.footerPillText, { color: item.tint }]}>{t("admin.viewDetails")}</Text>
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      {/* Premium Header */}
       <View style={styles.hero}>
         <View style={styles.heroTopRow}>
           <View>
-            <Text style={styles.heroTitle}>Admin Dashboard</Text>
-            <Text style={styles.heroSub} numberOfLines={1}>
-              {email}
-            </Text>
+            <Text style={styles.heroTitle}>{t("admin.dashboard")}</Text>
+            <Text style={styles.heroSub} numberOfLines={1}>{email}</Text>
           </View>
 
           <View style={styles.heroBadge}>
@@ -229,11 +207,10 @@ export default function AdminDashboard({ navigation }: any) {
         </View>
       </View>
 
-      {/* Loader */}
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={COLORS.light.primary} />
-          <Text style={styles.loadingText}>Loading dashboard…</Text>
+          <Text style={styles.loadingText}>{t("admin.loadingDashboard")}</Text>
         </View>
       ) : (
         <FlatList
@@ -258,167 +235,32 @@ export default function AdminDashboard({ navigation }: any) {
   );
 }
 
-/* ================= STYLES ================= */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F4F5F7",
-    paddingHorizontal: 14,
-    paddingTop: 14,
-  },
+  container: { flex: 1, backgroundColor: "#F4F5F7", paddingHorizontal: 14, paddingTop: 14 },
 
-  hero: {
-    backgroundColor: "#0E0E10",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    elevation: 4,
-  },
-  heroTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-  },
-  heroTitle: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "900",
-    letterSpacing: 0.2,
-  },
-  heroSub: {
-    marginTop: 6,
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 12.5,
-    fontWeight: "700",
-  },
-  heroBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  heroBadgeText: {
-    color: "#fff",
-    fontWeight: "900",
-    fontSize: 12,
-    letterSpacing: 0.6,
-  },
-  heroBottomRow: {
-    marginTop: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-  },
-  heroChip: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  heroChipText: {
-    color: "#fff",
-    fontSize: 12.5,
-    fontWeight: "800",
-  },
-  refreshBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  hero: { backgroundColor: "#0E0E10", borderRadius: 22, padding: 16, marginBottom: 14, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 18, elevation: 4 },
+  heroTopRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, alignItems: "center" },
+  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "900", letterSpacing: 0.2 },
+  heroSub: { marginTop: 6, color: "rgba(255,255,255,0.72)", fontSize: 12.5, fontWeight: "700" },
+  heroBadge: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999 },
+  heroBadgeText: { color: "#fff", fontWeight: "900", fontSize: 12, letterSpacing: 0.6 },
+  heroBottomRow: { marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  heroChip: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.12)" },
+  heroChipText: { color: "#fff", fontSize: 12.5, fontWeight: "800" },
+  refreshBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
 
-  list: {
-    paddingBottom: 20,
-    gap: 12,
-  },
-  row: {
-    gap: 12,
-    marginBottom: 12,
-  },
+  list: { paddingBottom: 20, gap: 12 },
+  row: { gap: 12, marginBottom: 12 },
 
-  card: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 14,
-    shadowColor: "#000",
-    shadowOpacity: Platform.OS === "android" ? 0.07 : 0.06,
-    shadowRadius: 16,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#EEF0F3",
-    minHeight: 150,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+  card: { flex: 1, backgroundColor: "#fff", borderRadius: 20, padding: 14, shadowColor: "#000", shadowOpacity: Platform.OS === "android" ? 0.07 : 0.06, shadowRadius: 16, elevation: 2, borderWidth: 1, borderColor: "#EEF0F3", minHeight: 150 },
+  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  iconPill: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  value: { marginTop: 16, fontSize: 28, fontWeight: "900", color: "#0E0E10" },
+  label: { marginTop: 4, fontSize: 13, fontWeight: "800", color: "#6B6B70" },
+  footerPill: { marginTop: 12, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999 },
+  dot: { width: 7, height: 7, borderRadius: 999 },
+  footerPillText: { fontWeight: "900", fontSize: 12 },
 
-  iconPill: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  value: {
-    marginTop: 16,
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#0E0E10",
-  },
-  label: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#6B6B70",
-  },
-
-  footerPill: {
-    marginTop: 12,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-  },
-  footerPillText: {
-    fontWeight: "900",
-    fontSize: 12,
-  },
-
-  loadingWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  loadingText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#6B6B70",
-  },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
+  loadingText: { fontSize: 13, fontWeight: "800", color: "#6B6B70" },
 });

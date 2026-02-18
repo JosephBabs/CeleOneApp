@@ -62,10 +62,73 @@
   "bottomTabs": {
     "Home": "Ilé",
     "LeComite": "Ìgbìmọ̀",
-    "Media": "Ayaworan",
+  "Jeunesse": "Ọdọ́",
     "Documents": "Ìwé àṣẹ",
     "Messages": "Ìránṣẹ́",
     "Cantiques": "Orin"
+  },
+
+  "jeunesse": {
+    "title": "Ọdọ́",
+    "childrenAndYouth": "Ìṣe àwọn ọmọde àti ọdọ́",
+    "amisDeJesus": "Amis de Jésus (Ìjọ Celestial)",
+    "registerChild": "Forúkọsílẹ̀ ọmọ",
+    "checkResults": "Ṣàyẹ̀wò abajade concours",
+    "identifier": "Ìdánimọ̀",
+    "enterIdentifier": "Tẹ ìdánimọ̀",
+    "search": "Wá",
+    "results": "Abajade",
+    "noResults": "A kò rí abajade kankan.",
+    "openPhases": "Ìpele concours",
+    "preselection": "Preselection",
+    "selection": "Selection",
+    "final": "Ìpele Ikẹyìn (Seme 2024)",
+    "shortlisted": "Àwọn tí a yàn",
+    "viewList": "Wo àtòjọ",
+    "close": "Tì",
+    "firstName": "Orúkọ àkọ́kọ́",
+    "lastName": "Orúkọ ìdílé",
+    "age": "Ọmọ ọdún",
+    "currentClass": "Kíláàsì lọ́wọ́lọwọ́",
+    "academicYear": "Ọdún ẹ̀kọ́",
+    "parishName": "Orúkọ parish",
+    "shepherdNames": "Orúkọ(s) olùṣọ́",
+    "teacherNames": "Orúkọ(s) olùkọ́",
+    "shepherdPhone": "Fóònù olùṣọ́",
+    "teacherPhone": "Fóònù olùkọ́",
+    "email": "Email",
+    "country": "Orílẹ̀-èdè",
+    "province": "Province",
+    "city": "Ìlú",
+    "region": "Agbègbè",
+    "subRegion": "Agbègbè kékeré",
+    "submit": "Firanṣẹ́",
+    "saved": "A fipamọ́",
+    "saveFailed": "Kò fipamọ́",
+    "weeklyQuiz": "Quiz ọ̀sẹ̀",
+    "startQuiz": "Bẹrẹ quiz",
+    "timeLeft": "Àkókò tó kù: {{sec}}s",
+    "submitQuiz": "Fi ránṣẹ́",
+    "score": "Score: {{score}}/{{total}}",
+    "alreadyPlayed": "O ti ṣe quiz yìí tẹ́lẹ̀.",
+    "quizNotAvailable": "Quiz kò sí."
+  },
+  "adminJeunesse": {
+    "title": "Admin Ọdọ́",
+    "filters": "Àwọn àlẹ́mọ",
+    "pasteCandidates": "Lẹ̀ mọ́ àwọn orúkọ (ọ̀kan ní ìlà kọọkan)",
+    "savePhaseList": "Fipamọ́ àtòjọ",
+    "selectYear": "Ọdún",
+    "selectPhase": "Ìpele",
+    "loadChildren": "Gba àwọn ọmọ",
+    "children": "Àwọn ọmọ",
+    "quizAttempts": "Ìfẹ̀sẹ̀yìn quiz",
+    "sendEmail": "Rán email",
+    "message": "Ìfiranṣẹ́",
+    "subject": "Kókó",
+    "send": "Rán",
+    "sent": "Ti rán",
+    "sendFailed": "Kò rán"
   },
   
   "settings": {
@@ -519,6 +582,55 @@
      "view_replies": "Wo àwọn ìdáhùn",
     "hide_replies": "Fi àwọn ìdáhùn pamọ"
   },
+
+ "chat": {
+    "now": "Ní báyìí",
+    "typing": "ń kọ…",
+    "members": "àwọn ọmọ ẹgbẹ́ {{count}}",
+    "you": "Ìwọ",
+    "user": "Olùmúlò",
+    "reply": "Dáhùn",
+    "replyingTo": "Ń dáhùn sí {{name}}",
+    "photo": "Fọ́tò",
+    "voiceNote": "Ohùn (voice note)",
+    "file": "Fáìlì",
+    "media": "Mídíà",
+    "document": "Dókùméńtì",
+    "thisMessageDeleted": "A ti pa ifiranṣẹ́ yìí rẹ́",
+
+    "connecting": "Ń so pọ̀…",
+    "disconnected": "Kò sí asopọ̀",
+    "loadingOlder": "Ń gba àwọn ifiranṣẹ́ àtijọ́…",
+    "socketErrorTitle": "Àṣìṣe socket",
+
+    "alertMessageTitle": "Ifiranṣẹ́",
+    "originalNotFound": "A kò rí ifiranṣẹ́ ìbẹ̀rẹ̀ (ó ṣeé ṣe kó ti parẹ / kò sí nínú DB àdúgbò).",
+
+    "editFailedTitle": "Àtúnṣe kò ṣàṣeyọrí",
+    "sendFailedTitle": "Ìránṣẹ́ kò ṣàṣeyọrí",
+    "failed": "Kò ṣàṣeyọrí.",
+    "queuedOffline": "A fi ifiranṣẹ́ sí ìtòlẹ́sẹẹsẹ (offline).",
+
+    "imagesTitle": "Àwòrán",
+    "pickImagesFailed": "Yíyan àwòrán kò ṣàṣeyọrí",
+
+    "filesTitle": "Fáìlì",
+    "pickFilesFailed": "Yíyan fáìlì kò ṣàṣeyọrí",
+
+    "uploadErrorTitle": "Àṣìṣe upload",
+    "uploadFailed": "Upload kò ṣàṣeyọrí",
+
+    "placeholderMessage": "Ifiranṣẹ́",
+    "placeholderCantWrite": "O kò lè kọ síbí",
+
+    "attachPhotos": "Àwòrán",
+    "attachFilesDocuments": "Fáìlì / Dókùméńtì",
+
+    "addCaption": "Fi àlàyé kún un…",
+    "photosCount": "{{count}} fọ́tò",
+    "photosCount_plural": "{{count}} fọ́tò"
+  },
+
   "postDetail": {
     "title": "Ẹkọ Ìwé",
     "like": "Ifẹ́",

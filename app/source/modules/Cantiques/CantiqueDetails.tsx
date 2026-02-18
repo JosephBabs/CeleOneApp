@@ -2,8 +2,8 @@
 // Requirements:
 // - react-native-webview
 // - react-native-vector-icons/Ionicons
-// - (optional but recommended) expo-av OR react-native-track-player OR react-native-sound
-//   This implementation uses react-native-sound (simple). If you use another, tell me and I’ll adapt.
+// - (optional but recommended) expo-av OR react-native-track-player OR react-native-nitro-sound
+//   This implementation uses react-native-nitro-sound (simple). If you use another, tell me and I’ll adapt.
 // - Clipboard uses @react-native-clipboard/clipboard
 // - Share uses react-native Share API
 // - Firestore: cantiques collection with fields: hymnNumber, language, title, musicalKey, hymnContent, audioUrl?, scoreUrl?, scoreHtml?
@@ -36,7 +36,7 @@ import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import { db } from "../auth/firebaseConfig";
 
 // If you use another audio library, tell me and I will adapt.
-// yarn add react-native-sound
+// yarn add react-native-nitro-sound
 // npx pod-install
 import Sound from "react-native-sound";
 Sound.setCategory("Playback");

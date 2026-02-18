@@ -476,11 +476,7 @@ export default function AdminTVChannels({ navigation }: any) {
       {/* ===== PREMIUM MODAL (BOTTOM SHEET) ===== */}
       <Modal visible={!!mode} transparent animationType="slide" onRequestClose={closeModal}>
         <View style={styles.overlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={{ width: "100%" }}
-          >
-            <View style={styles.modal}>
+          <View style={styles.modal}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {/* ===== CREATE / EDIT ===== */}
                 {(mode === "create" || mode === "edit") && (
@@ -696,6 +692,11 @@ export default function AdminTVChannels({ navigation }: any) {
                 )}
               </ScrollView>
             </View>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ width: "100%" }}
+          >
+            
           </KeyboardAvoidingView>
         </View>
       </Modal>

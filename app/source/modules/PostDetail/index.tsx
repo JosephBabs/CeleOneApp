@@ -258,7 +258,7 @@ export default function PostDetailPro({ route, navigation }: any) {
 
   // ---- Share
   const handleShare = async () => {
-    const link = postData.shareLink || `https://celeonetv.com/post/${postId}`;
+    const link = postData.shareLink || `https://celeonetv.com/posts/${postId}?share=2`;
     try {
       await Share.share({
         message: `${postData.title ? postData.title + '\n\n' : ''}${link}`,

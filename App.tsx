@@ -13,13 +13,11 @@ import {
   listenForegroundNotifications,
   handleBackgroundNotifications,
 } from './src/services/notifications';
+import { bootstrapChat } from './src/chat/chatBootstrap';
 
 enableScreens(true);
 
 export default function App() {
-
-
-  
   useEffect(() => {
     let unsubscribeFCM: (() => void) | undefined;
 
@@ -30,6 +28,10 @@ export default function App() {
       }
 
       console.log('✅ User logged in:', user.uid);
+
+      
+        bootstrapChat('https://your-socket-server.com').catch(console.error);
+      
 
       // Init FCM
       await initFCM(user.uid);

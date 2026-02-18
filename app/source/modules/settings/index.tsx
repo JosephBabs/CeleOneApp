@@ -1,3 +1,5 @@
+/* eslint-disable react/no-unstable-nested-components */
+/* eslint-disable react-native/no-inline-styles */
 // Settings.tsx
 // Premium Profile + Settings + FULL-PAGE MODALS implementation
 // - Saves settings to AsyncStorage + Firestore (so user recovers on another phone)

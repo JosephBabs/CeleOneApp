@@ -21,8 +21,10 @@
     <!-- Storage (Old Android <= 12) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32"
+    tools:replace="android:maxSdkVersion" />
+
 
     <!-- ⚠️ ONLY KEEP IF REALLY REQUIRED -->
     <!-- Remove this if you don't absolutely need full file manager access -->

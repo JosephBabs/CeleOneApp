@@ -6,7 +6,7 @@ export const d_assets = {
     postImg: require("../../assets/images/posts/post0.jpg"),
     postImg1: require("../../assets/images/posts/post1.jpg"),
     postImg2: require("../../assets/images/posts/post2.jpg"),
-    chatBg: require("../../assets/images/chatBg.jpg"),
+    chatBg: require("../../assets/images/chatbg.png"),
     onboardingSlide1: require("../../assets/images/appLogo.png"),
     onboardingSlide2: require("../../assets/images/cst.png"),
     onboardingSlide3: require("../../assets/images/celeLogo.png")

@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["jest"],
   },
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": ["**/*.ts", "**/*.tsx", "app/source/modules/ChatRoom/chatWhatsAppStyle.jsx"],
   "exclude": ["**/node_modules", "**/Pods"]
 }
