@@ -1,5 +1,6 @@
 /* eslint-disable react/no-unstable-nested-components */
-// AdminJeunesse.tsx
+// AdminJeunesse.tsx  ✅ Multi-question quiz + isActive + add/edit/delete questions
+
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -19,7 +20,7 @@ import {
 import Icon from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../../../core/theme/colors";
-import { auth, db } from "../auth/firebaseConfig";
+import { db } from "../auth/firebaseConfig";
 import {
   addDoc,
   collection,
@@ -27,11 +28,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import useAdminEnglish from "../../../../src/hooks/useAdminEnglish";
 
@@ -77,6 +80,69 @@ function nextPhase(p: Phase): Phase | null {
   const i = phaseIndex(p);
   if (i < 0 || i >= PHASES.length - 1) return null;
   return PHASES[i + 1];
+}
+
+/** ========= Quiz helpers (multi-question) ========= **/
+type QuizQuestion = {
+  id: string;
+  text: string;
+  options: string[]; // 4 options
+  answerIndex: number; // 0..3
+};
+
+function emptyQuestion(): QuizQuestion {
+  return {
+    id:
+      "q_" +
+      Date.now().toString(36).slice(-6).toUpperCase() +
+      Math.random().toString(36).slice(2, 6).toUpperCase(),
+    text: "",
+    options: ["", "", "", ""],
+    answerIndex: 0,
+  };
+}
+
+function normalizeOldQuizToMulti(q: any) {
+  // Supports old: {question, options:{A..D}, correct:"A"} -> converts to questions:[...]
+  const title = norm(q?.title) || "Quiz";
+  const durationSec = Number(q?.durationSec || 60);
+  const isActive = q?.isActive ?? true;
+
+  if (Array.isArray(q?.questions) && q.questions.length) {
+    return {
+      title,
+      durationSec,
+      isActive,
+      questions: q.questions as QuizQuestion[],
+    };
+  }
+
+  const oldQ = norm(q?.question);
+  const A = norm(q?.options?.A);
+  const B = norm(q?.options?.B);
+  const C = norm(q?.options?.C);
+  const D = norm(q?.options?.D);
+  const opts = [A, B, C, D].filter((x) => x !== "");
+  const correct = String(q?.correct || "A").toUpperCase();
+  const answerIndex = ["A", "B", "C", "D"].indexOf(correct);
+
+  if (!oldQ || opts.length < 2 || answerIndex < 0) {
+    return { title, durationSec, isActive, questions: [] as QuizQuestion[] };
+  }
+
+  return {
+    title,
+    durationSec,
+    isActive,
+    questions: [
+      {
+        id: q?.id || "q1",
+        text: oldQ,
+        options: [A, B, C, D],
+        answerIndex,
+      },
+    ] as QuizQuestion[],
+  };
 }
 
 export default function AdminJeunesse({ navigation }: any) {
@@ -131,7 +197,6 @@ export default function AdminJeunesse({ navigation }: any) {
 
   // ---------- Concours ----------
   const [settings, setSettings] = useState<any>(null);
-
   const [concoursOpen, setConcoursOpen] = useState(false);
 
   // Manage candidates modal (search + click to add)
@@ -159,20 +224,25 @@ export default function AdminJeunesse({ navigation }: any) {
     finalEnd: "",
   });
 
-  // ---------- Quiz ----------
+  // ---------- Quiz (MULTI-QUESTIONS) ----------
   const [quizOpen, setQuizOpen] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<any | null>(null);
-  const [quizDraft, setQuizDraft] = useState({
-    question: "",
-    a: "",
-    b: "",
-    c: "",
-    d: "",
-    correct: "A",
+
+  const [quizDraft, setQuizDraft] = useState<{
+    title: string;
+    durationSec: string;
+    isActive: boolean;
+    questions: QuizQuestion[];
+  }>({
+    title: "",
     durationSec: "60",
-    activeFrom: "",
-    activeTo: "",
+    isActive: true,
+    questions: [],
   });
+
+  const [questionModal, setQuestionModal] = useState(false);
+  const [questionDraft, setQuestionDraft] = useState<QuizQuestion>(emptyQuestion());
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
 
   // ---------- Load ----------
   useEffect(() => {
@@ -213,9 +283,21 @@ export default function AdminJeunesse({ navigation }: any) {
   };
 
   const loadActiveQuiz = async () => {
-    const snap = await getDocs(query(collection(db, "jeunesse_quizzes"), orderBy("createdAt", "desc")));
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setActiveQuiz(list[0] || null);
+    // Prefer isActive==true newest, else newest overall
+    let snap = await getDocs(
+      query(collection(db, "jeunesse_quizzes"), where("isActive", "==", true), orderBy("createdAt", "desc"), limit(1))
+    );
+
+    if (snap.empty) {
+      snap = await getDocs(query(collection(db, "jeunesse_quizzes"), orderBy("createdAt", "desc"), limit(1)));
+    }
+
+    if (snap.empty) {
+      setActiveQuiz(null);
+      return;
+    }
+    const d = snap.docs[0];
+    setActiveQuiz({ id: d.id, ...d.data() });
   };
 
   // ---------- Filters + Search ----------
@@ -308,7 +390,6 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const applyPickedValue = (value: string) => {
     setFilters((s) => {
-      // cascade reset when higher-level changes
       if (pickerField === "country") return { country: value, province: "", city: "", region: "", subRegion: "" };
       if (pickerField === "province") return { ...s, province: value, city: "", region: "", subRegion: "" };
       if (pickerField === "city") return { ...s, city: value, region: "", subRegion: "" };
@@ -422,7 +503,6 @@ export default function AdminJeunesse({ navigation }: any) {
       const ref = doc(db, "jeunesse_settings", SETTINGS_DOC);
       const year = periodDraft.year.trim() || String(new Date().getFullYear());
 
-      // Ensure concours structure exists
       const currentYears = settings?.years || {};
       const currentYear = currentYears[year] || {};
       const currentConcours = currentYear?.concours || {
@@ -458,7 +538,7 @@ export default function AdminJeunesse({ navigation }: any) {
     }
   };
 
-  // ====== Candidates workflow (search in modal + click to add) ======
+  // ====== Candidates workflow ======
   const getYearData = () => {
     const year = periodDraft.year.trim() || String(new Date().getFullYear());
     const y = (settings?.years || {})[year] || {};
@@ -515,10 +595,7 @@ export default function AdminJeunesse({ navigation }: any) {
   const selectedCandidateSet = useMemo(() => new Set(selectedCandidateIds), [selectedCandidateIds]);
 
   const candidatePool = useMemo(() => {
-    // You can decide to show ALL children, or only those matching current filters.
-    // Here: show filteredChildren (respects filters + main search on children tab).
     const list = filteredChildren;
-
     const text = candidateSearch.trim().toLowerCase();
     if (!text) return list;
 
@@ -544,7 +621,7 @@ export default function AdminJeunesse({ navigation }: any) {
     return selectedCandidateIds.map((id) => map.get(id)).filter(Boolean);
   }, [children, selectedCandidateIds]);
 
-  // ====== Passed workflow (check candidate passed -> auto add to next concours + store average) ======
+  // ====== Passed workflow ======
   const openPassed = (phase: Phase) => {
     Keyboard.dismiss();
     const { concours } = getYearData();
@@ -575,7 +652,6 @@ export default function AdminJeunesse({ navigation }: any) {
   };
 
   const setAverage = (childId: string, v: string) => {
-    // keep only digits + dot
     const cleaned = v.replace(/[^\d.]/g, "");
     setPassedMap((m) => ({
       ...m,
@@ -618,29 +694,24 @@ export default function AdminJeunesse({ navigation }: any) {
       const toCandidatesSet = new Set<string>((concours?.[to]?.candidates || []) as string[]);
 
       const nextFromPassed: Record<string, any> = { ...(concours?.[from]?.passed || {}) };
-
       const toAdd: string[] = [];
 
       for (const id of fromCandidates) {
         const entry = passedMap[id];
         if (!entry) continue;
 
-        // store passed status + average on FROM phase
         nextFromPassed[id] = {
           passed: !!entry.passed,
           average: entry.average ? Number(entry.average) : null,
           updatedAt: Date.now(),
         };
 
-        // if passed => push to next phase candidate list
         if (entry.passed) {
           if (!toCandidatesSet.has(id)) {
             toCandidatesSet.add(id);
             toAdd.push(id);
           }
 
-          // ALSO: write a "result" doc so your public Jeunesse page can search by identifier
-          // key = `${year}_${to}_${childId}`
           const child = children.find((c) => c.id === id);
           if (child?.identifier) {
             const resultId = `${year}_${to}_${id}`;
@@ -691,50 +762,119 @@ export default function AdminJeunesse({ navigation }: any) {
       setPassedOpen(false);
       await loadSettings();
 
-      Alert.alert(
-        t("adminJeunesse.title"),
-        `Saved. Moved ${toAdd.length} candidate(s) to ${PHASE_LABEL[to]}.`
-      );
+      Alert.alert(t("adminJeunesse.title"), `Saved. Moved ${toAdd.length} candidate(s) to ${PHASE_LABEL[to]}.`);
     } catch (e: any) {
       Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
     }
   };
 
-  // ---------- Quiz ----------
+  // ---------- Quiz (MULTI-QUESTIONS) ----------
   const openQuiz = () => {
     const q = activeQuiz || {};
+    const multi = normalizeOldQuizToMulti(q);
+
     setQuizDraft({
-      question: norm(q.question),
-      a: norm(q.options?.A),
-      b: norm(q.options?.B),
-      c: norm(q.options?.C),
-      d: norm(q.options?.D),
-      correct: norm(q.correct || "A"),
-      durationSec: String(q.durationSec || "60"),
-      activeFrom: norm(q.activeFrom),
-      activeTo: norm(q.activeTo),
+      title: multi.title || "",
+      durationSec: String(multi.durationSec || 60),
+      isActive: !!multi.isActive,
+      questions: multi.questions || [],
     });
+
     setQuizOpen(true);
   };
 
-  const saveQuiz = async () => {
-    if (!quizDraft.question.trim() || !quizDraft.a.trim() || !quizDraft.b.trim()) {
-      Alert.alert(t("adminJeunesse.title"), t("adminJeunesse.children.required"));
+  const openAddQuestion = () => {
+    setQuestionDraft(emptyQuestion());
+    setEditingQuestionIndex(null);
+    setQuestionModal(true);
+  };
+
+  const openEditQuestion = (q: QuizQuestion, index: number) => {
+    setQuestionDraft({
+      id: q.id,
+      text: norm(q.text),
+      options: Array.isArray(q.options) ? [...q.options] : ["", "", "", ""],
+      answerIndex: Number.isFinite(q.answerIndex) ? q.answerIndex : 0,
+    });
+    setEditingQuestionIndex(index);
+    setQuestionModal(true);
+  };
+
+  const saveQuestion = () => {
+    if (!questionDraft.text.trim()) {
+      Alert.alert(t("adminJeunesse.title"), "Question text required");
       return;
     }
-    try {
-      const payload = {
-        question: quizDraft.question.trim(),
-        options: {
-          A: quizDraft.a.trim(),
-          B: quizDraft.b.trim(),
-          C: quizDraft.c.trim(),
-          D: quizDraft.d.trim(),
+    const opts = (questionDraft.options || []).map((x) => norm(x));
+    if (opts.filter(Boolean).length < 2) {
+      Alert.alert(t("adminJeunesse.title"), "Provide at least 2 options");
+      return;
+    }
+    const idx = Number(questionDraft.answerIndex || 0);
+    if (idx < 0 || idx > 3) {
+      Alert.alert(t("adminJeunesse.title"), "Correct answer index must be 0 - 3");
+      return;
+    }
+
+    const list = [...(quizDraft.questions || [])];
+    const cleaned: QuizQuestion = {
+      id: questionDraft.id || emptyQuestion().id,
+      text: questionDraft.text.trim(),
+      options: [opts[0] || "", opts[1] || "", opts[2] || "", opts[3] || ""],
+      answerIndex: idx,
+    };
+
+    if (editingQuestionIndex !== null) {
+      list[editingQuestionIndex] = cleaned;
+    } else {
+      list.push(cleaned);
+    }
+
+    setQuizDraft((s) => ({ ...s, questions: list }));
+    setQuestionModal(false);
+  };
+
+  const deleteQuestion = (index: number) => {
+    Alert.alert(t("adminJeunesse.title"), "Delete this question?", [
+      { text: t("common.cancel") },
+      {
+        text: t("common.delete"),
+        style: "destructive",
+        onPress: () => {
+          const list = [...(quizDraft.questions || [])];
+          list.splice(index, 1);
+          setQuizDraft((s) => ({ ...s, questions: list }));
         },
-        correct: String(quizDraft.correct || "A").toUpperCase(),
+      },
+    ]);
+  };
+
+  const saveQuiz = async () => {
+    if (!quizDraft.title.trim()) {
+      Alert.alert(t("adminJeunesse.title"), "Quiz title required");
+      return;
+    }
+    if (!quizDraft.questions.length) {
+      Alert.alert(t("adminJeunesse.title"), "Add at least one question");
+      return;
+    }
+
+    try {
+      // if you set this quiz active, deactivate others
+      if (quizDraft.isActive) {
+        const snap = await getDocs(query(collection(db, "jeunesse_quizzes"), where("isActive", "==", true)));
+        for (const d of snap.docs) {
+          if (d.id !== activeQuiz?.id) {
+            await updateDoc(doc(db, "jeunesse_quizzes", d.id), { isActive: false, updatedAt: serverTimestamp() });
+          }
+        }
+      }
+
+      const payload = {
+        title: quizDraft.title.trim(),
         durationSec: Number(quizDraft.durationSec || 60),
-        activeFrom: quizDraft.activeFrom.trim(),
-        activeTo: quizDraft.activeTo.trim(),
+        isActive: !!quizDraft.isActive,
+        questions: quizDraft.questions,
         updatedAt: serverTimestamp(),
       };
 
@@ -810,7 +950,6 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const ConcoursCard = () => {
     const { concours } = getYearData();
-
     const phaseCount = (p: Phase) => ((concours?.[p]?.candidates || []) as string[]).length;
 
     return (
@@ -958,11 +1097,11 @@ export default function AdminJeunesse({ navigation }: any) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.roomName} numberOfLines={2}>
-                      {activeQuiz.question}
+                      {activeQuiz.title || "Quiz"}
                     </Text>
-                    <Text style={styles.roomSub} numberOfLines={1}>
-                      {t("adminJeunesse.quiz.durationSec")}: {activeQuiz.durationSec || 60}s · {t("adminJeunesse.quiz.correct")}{" "}
-                      {activeQuiz.correct || "A"}
+                    <Text style={styles.roomSub} numberOfLines={2}>
+                      Questions: {Array.isArray(activeQuiz.questions) ? activeQuiz.questions.length : 1} · Duration:{" "}
+                      {activeQuiz.durationSec || 60}s · Active: {activeQuiz.isActive ? "YES" : "NO"}
                     </Text>
                   </View>
                 </View>
@@ -977,7 +1116,7 @@ export default function AdminJeunesse({ navigation }: any) {
         </ScrollView>
       )}
 
-      {/* ================= FILTERS MODAL (dropdowns w/ unique values) ================= */}
+      {/* ================= FILTERS MODAL ================= */}
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
         <View style={styles.overlay}>
           <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setFiltersOpen(false))} />
@@ -1041,23 +1180,14 @@ export default function AdminJeunesse({ navigation }: any) {
             </View>
 
             <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
-              <TouchableOpacity
-                style={styles.pickItem}
-                onPress={() => applyPickedValue("")}
-                activeOpacity={0.9}
-              >
+              <TouchableOpacity style={styles.pickItem} onPress={() => applyPickedValue("")} activeOpacity={0.9}>
                 <Text style={[styles.pickText, { fontWeight: "900" }]}>— Clear —</Text>
               </TouchableOpacity>
 
               {pickerOptions
                 .filter((o) => !pickerSearch.trim() || o.toLowerCase().includes(pickerSearch.trim().toLowerCase()))
                 .map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    style={styles.pickItem}
-                    onPress={() => applyPickedValue(opt)}
-                    activeOpacity={0.9}
-                  >
+                  <TouchableOpacity key={opt} style={styles.pickItem} onPress={() => applyPickedValue(opt)} activeOpacity={0.9}>
                     <Text style={styles.pickText}>{opt}</Text>
                   </TouchableOpacity>
                 ))}
@@ -1171,7 +1301,7 @@ export default function AdminJeunesse({ navigation }: any) {
         </View>
       </Modal>
 
-      {/* ================= CANDIDATES MODAL (search + click to add) ================= */}
+      {/* ================= CANDIDATES MODAL ================= */}
       <Modal visible={candidatesOpen} transparent animationType="slide" onRequestClose={() => setCandidatesOpen(false)}>
         <View style={styles.overlay}>
           <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setCandidatesOpen(false))} />
@@ -1179,9 +1309,7 @@ export default function AdminJeunesse({ navigation }: any) {
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Candidates · {PHASE_LABEL[candidatePhase]}</Text>
-                <Text style={styles.modalSub}>
-                  Search and tap a child to add. Selected are saved for this concours.
-                </Text>
+                <Text style={styles.modalSub}>Search and tap a child to add. Selected are saved for this concours.</Text>
               </View>
               <TouchableOpacity onPress={() => setCandidatesOpen(false)} style={styles.modalCloseBtn}>
                 <Icon name="close" size={18} color="#111" />
@@ -1199,10 +1327,7 @@ export default function AdminJeunesse({ navigation }: any) {
               />
             </View>
 
-            {/* Selected list */}
-            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-              Selected ({selectedCandidateIds.length})
-            </Text>
+            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Selected ({selectedCandidateIds.length})</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
               {selectedCandidateObjects.length ? (
                 selectedCandidateObjects.map((c: any) => (
@@ -1234,7 +1359,11 @@ export default function AdminJeunesse({ navigation }: any) {
                     activeOpacity={0.9}
                   >
                     <View style={styles.pickLeft}>
-                      <Icon name={on ? "checkmark-circle" : "ellipse-outline"} size={20} color={on ? COLORS.light.primary : "#9CA3AF"} />
+                      <Icon
+                        name={on ? "checkmark-circle" : "ellipse-outline"}
+                        size={20}
+                        color={on ? COLORS.light.primary : "#9CA3AF"}
+                      />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.pickName} numberOfLines={1}>
@@ -1260,7 +1389,7 @@ export default function AdminJeunesse({ navigation }: any) {
         </View>
       </Modal>
 
-      {/* ================= PASSED MODAL (check + average -> moves to next concours) ================= */}
+      {/* ================= PASSED MODAL ================= */}
       <Modal visible={passedOpen} transparent animationType="slide" onRequestClose={() => setPassedOpen(false)}>
         <View style={styles.overlay}>
           <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setPassedOpen(false))} />
@@ -1341,7 +1470,7 @@ export default function AdminJeunesse({ navigation }: any) {
         </View>
       </Modal>
 
-      {/* ================= QUIZ MODAL ================= */}
+      {/* ================= QUIZ MODAL (MULTI QUESTIONS) ================= */}
       <Modal visible={quizOpen} transparent animationType="slide" onRequestClose={() => setQuizOpen(false)}>
         <View style={styles.overlay}>
           <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setQuizOpen(false))} />
@@ -1350,43 +1479,135 @@ export default function AdminJeunesse({ navigation }: any) {
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>{t("adminJeunesse.quiz.manage")}</Text>
-                  <Text style={styles.modalSub}>{t("adminJeunesse.quiz.title")}</Text>
+                  <Text style={styles.modalSub}>Create / update multi-question quiz</Text>
                 </View>
                 <TouchableOpacity onPress={() => setQuizOpen(false)} style={styles.modalCloseBtn}>
                   <Icon name="close" size={18} color="#111" />
                 </TouchableOpacity>
               </View>
 
-              <Field label={t("adminJeunesse.quiz.question")} value={quizDraft.question} onChangeText={(v) => setQuizDraft((s) => ({ ...s, question: v }))} />
+              <Field
+                label="Quiz Title"
+                value={quizDraft.title}
+                onChangeText={(v) => setQuizDraft((s) => ({ ...s, title: v }))}
+              />
 
-              <Text style={styles.sectionTitle}>Options</Text>
-              <Field label={t("adminJeunesse.quiz.optionA")} value={quizDraft.a} onChangeText={(v) => setQuizDraft((s) => ({ ...s, a: v }))} />
-              <Field label={t("adminJeunesse.quiz.optionB")} value={quizDraft.b} onChangeText={(v) => setQuizDraft((s) => ({ ...s, b: v }))} />
-              <Field label={t("adminJeunesse.quiz.optionC")} value={quizDraft.c} onChangeText={(v) => setQuizDraft((s) => ({ ...s, c: v }))} />
-              <Field label={t("adminJeunesse.quiz.optionD")} value={quizDraft.d} onChangeText={(v) => setQuizDraft((s) => ({ ...s, d: v }))} />
+              <FieldInline
+                label="Duration (seconds)"
+                value={quizDraft.durationSec}
+                onChangeText={(v: any) => setQuizDraft((s) => ({ ...s, durationSec: v }))}
+                placeholder="60"
+                keyboardType="numeric"
+              />
 
-              <View style={styles.twoBtns}>
-                <FieldInline
-                  label={t("adminJeunesse.quiz.correct")}
-                  value={quizDraft.correct}
-                  onChangeText={(v: any) => setQuizDraft((s) => ({ ...s, correct: v }))}
-                  placeholder="A"
-                />
-                <FieldInline
-                  label={t("adminJeunesse.quiz.durationSec")}
-                  value={quizDraft.durationSec}
-                  onChangeText={(v: any) => setQuizDraft((s) => ({ ...s, durationSec: v }))}
-                  placeholder="60"
-                  keyboardType="numeric"
-                />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <Text style={styles.label}>Set as Active Quiz</Text>
+                <TouchableOpacity
+                  onPress={() => setQuizDraft((s) => ({ ...s, isActive: !s.isActive }))}
+                  activeOpacity={0.9}
+                  style={[
+                    styles.smallBtn,
+                    { backgroundColor: quizDraft.isActive ? "rgba(47,165,169,0.12)" : "#F3F4F6" },
+                  ]}
+                >
+                  <Icon name={quizDraft.isActive ? "checkmark-circle" : "ellipse-outline"} size={16} color="#111" />
+                  <Text style={styles.smallBtnText}>{quizDraft.isActive ? "YES" : "NO"}</Text>
+                </TouchableOpacity>
               </View>
 
-              <Field label={t("adminJeunesse.quiz.activeFrom")} value={quizDraft.activeFrom} onChangeText={(v) => setQuizDraft((s) => ({ ...s, activeFrom: v }))} />
-              <Field label={t("adminJeunesse.quiz.activeTo")} value={quizDraft.activeTo} onChangeText={(v) => setQuizDraft((s) => ({ ...s, activeTo: v }))} />
+              <Text style={styles.sectionTitle}>Questions ({quizDraft.questions.length})</Text>
+
+              {quizDraft.questions.length ? (
+                <View style={{ gap: 10 }}>
+                  {quizDraft.questions.map((q, index) => (
+                    <View key={q.id} style={styles.pickRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pickName} numberOfLines={2}>
+                          {index + 1}. {q.text}
+                        </Text>
+                        <Text style={styles.pickSub} numberOfLines={2}>
+                          Correct: {q.options?.[q.answerIndex] || "—"}
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity onPress={() => openEditQuestion(q, index)} style={styles.iconMiniBtn} activeOpacity={0.9}>
+                        <Icon name="create-outline" size={18} color="#111" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity onPress={() => deleteQuestion(index)} style={styles.iconMiniBtn} activeOpacity={0.9}>
+                        <Icon name="trash-outline" size={18} color="#111" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.helperText}>No questions yet. Tap “Add Question”.</Text>
+              )}
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={openAddQuestion}>
+                <Icon name="add" size={16} color="#fff" />
+                <Text style={styles.primaryText}>Add Question</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.primaryBtn} onPress={saveQuiz}>
                 <Icon name="save-outline" size={16} color="#fff" />
                 <Text style={styles.primaryText}>{t("common.save")}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= QUESTION MODAL ================= */}
+      <Modal visible={questionModal} transparent animationType="slide" onRequestClose={() => setQuestionModal(false)}>
+        <View style={styles.overlay}>
+          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setQuestionModal(false))} />
+          <View style={styles.modal}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>{editingQuestionIndex === null ? "Add Question" : "Edit Question"}</Text>
+                  <Text style={styles.modalSub}>4 options, choose correct answer index (0-3)</Text>
+                </View>
+                <TouchableOpacity onPress={() => setQuestionModal(false)} style={styles.modalCloseBtn}>
+                  <Icon name="close" size={18} color="#111" />
+                </TouchableOpacity>
+              </View>
+
+              <Field
+                label="Question"
+                value={questionDraft.text}
+                onChangeText={(v) => setQuestionDraft((s) => ({ ...s, text: v }))}
+              />
+
+              <Text style={styles.sectionTitle}>Options</Text>
+              {(questionDraft.options || ["", "", "", ""]).map((op, idx) => (
+                <Field
+                  key={idx}
+                  label={`Option ${idx + 1}`}
+                  value={op}
+                  onChangeText={(v) => {
+                    const arr = [...(questionDraft.options || ["", "", "", ""])];
+                    arr[idx] = v;
+                    setQuestionDraft((s) => ({ ...s, options: arr }));
+                  }}
+                />
+              ))}
+
+              <FieldInline
+                label="Correct answer index (0-3)"
+                value={String(questionDraft.answerIndex)}
+                onChangeText={(v: any) => {
+                  const n = Number(String(v || "0").replace(/[^\d]/g, "")) || 0;
+                  setQuestionDraft((s) => ({ ...s, answerIndex: Math.max(0, Math.min(3, n)) }));
+                }}
+                placeholder="0"
+                keyboardType="numeric"
+              />
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={saveQuestion}>
+                <Icon name="save-outline" size={16} color="#fff" />
+                <Text style={styles.primaryText}>Save Question</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1705,7 +1926,16 @@ const styles = StyleSheet.create({
   },
   smallBtnText: { fontWeight: "900", color: "#111", fontSize: 12 },
 
-  // dropdown
+  iconMiniBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+
   dropdown: {
     backgroundColor: "#F3F4F6",
     borderRadius: 14,
@@ -1717,7 +1947,6 @@ const styles = StyleSheet.create({
   },
   dropdownText: { fontWeight: "800", color: "#111", flex: 1, paddingRight: 10 },
 
-  // picker
   searchRowLight: {
     flexDirection: "row",
     alignItems: "center",
@@ -1736,7 +1965,6 @@ const styles = StyleSheet.create({
   },
   pickText: { fontWeight: "800", color: "#111" },
 
-  // candidates select
   selChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -1775,7 +2003,6 @@ const styles = StyleSheet.create({
   pickRight: { marginLeft: 8 },
   pickTag: { fontWeight: "900", color: "#111", fontSize: 11 },
 
-  // passed rows
   passRow: {
     flexDirection: "row",
     alignItems: "center",
