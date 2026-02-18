@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unstable-nested-components */
 // AdminJeunesse.tsx  ✅ Multi-question quiz + isActive + add/edit/delete questions
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,11 @@ import {
   Alert,
   Pressable,
   Keyboard,
-} from "react-native";
-import Icon from "react-native-vector-icons/Ionicons";
-import { useTranslation } from "react-i18next";
-import { COLORS } from "../../../core/theme/colors";
-import { db } from "../auth/firebaseConfig";
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useTranslation } from 'react-i18next';
+import { COLORS } from '../../../core/theme/colors';
+import { db } from '../auth/firebaseConfig';
 import {
   addDoc,
   collection,
@@ -35,40 +35,40 @@ import {
   setDoc,
   updateDoc,
   where,
-} from "firebase/firestore";
-import useAdminEnglish from "../../../../src/hooks/useAdminEnglish";
+} from 'firebase/firestore';
+import useAdminEnglish from '../../../../src/hooks/useAdminEnglish';
 
-type Tab = "children" | "concours" | "quiz";
+type Tab = 'children' | 'concours' | 'quiz';
 
-const SETTINGS_DOC = "global"; // doc id inside jeunesse_settings
-const PHASES = ["prelim", "preselection", "selection", "final"] as const;
+const SETTINGS_DOC = 'global'; // doc id inside jeunesse_settings
+const PHASES = ['prelim', 'preselection', 'selection', 'final'] as const;
 type Phase = (typeof PHASES)[number];
 
 const PHASE_LABEL: Record<Phase, string> = {
-  prelim: "Preliminary",
-  preselection: "Preselection",
-  selection: "Selection",
-  final: "Final",
+  prelim: 'Preliminary',
+  preselection: 'Preselection',
+  selection: 'Selection',
+  final: 'Final',
 };
 
 function genIdentifier() {
   return (
-    "J" +
+    'J' +
     Date.now().toString(36).slice(-6).toUpperCase() +
     Math.random().toString(36).slice(2, 6).toUpperCase()
   );
 }
 
 function norm(s: any) {
-  return String(s || "").trim();
+  return String(s || '').trim();
 }
 
 function uniqSorted(values: string[]) {
   const set = new Set<string>();
   values
-    .map((v) => norm(v))
+    .map(v => norm(v))
     .filter(Boolean)
-    .forEach((v) => set.add(v));
+    .forEach(v => set.add(v));
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
@@ -93,18 +93,18 @@ type QuizQuestion = {
 function emptyQuestion(): QuizQuestion {
   return {
     id:
-      "q_" +
+      'q_' +
       Date.now().toString(36).slice(-6).toUpperCase() +
       Math.random().toString(36).slice(2, 6).toUpperCase(),
-    text: "",
-    options: ["", "", "", ""],
+    text: '',
+    options: ['', '', '', ''],
     answerIndex: 0,
   };
 }
 
 function normalizeOldQuizToMulti(q: any) {
   // Supports old: {question, options:{A..D}, correct:"A"} -> converts to questions:[...]
-  const title = norm(q?.title) || "Quiz";
+  const title = norm(q?.title) || 'Quiz';
   const durationSec = Number(q?.durationSec || 60);
   const isActive = q?.isActive ?? true;
 
@@ -122,9 +122,9 @@ function normalizeOldQuizToMulti(q: any) {
   const B = norm(q?.options?.B);
   const C = norm(q?.options?.C);
   const D = norm(q?.options?.D);
-  const opts = [A, B, C, D].filter((x) => x !== "");
-  const correct = String(q?.correct || "A").toUpperCase();
-  const answerIndex = ["A", "B", "C", "D"].indexOf(correct);
+  const opts = [A, B, C, D].filter(x => x !== '');
+  const correct = String(q?.correct || 'A').toUpperCase();
+  const answerIndex = ['A', 'B', 'C', 'D'].indexOf(correct);
 
   if (!oldQ || opts.length < 2 || answerIndex < 0) {
     return { title, durationSec, isActive, questions: [] as QuizQuestion[] };
@@ -136,7 +136,7 @@ function normalizeOldQuizToMulti(q: any) {
     isActive,
     questions: [
       {
-        id: q?.id || "q1",
+        id: q?.id || 'q1',
         text: oldQ,
         options: [A, B, C, D],
         answerIndex,
@@ -149,50 +149,51 @@ export default function AdminJeunesse({ navigation }: any) {
   const { t } = useTranslation();
   useAdminEnglish();
 
-  const [tab, setTab] = useState<Tab>("children");
+  const [tab, setTab] = useState<Tab>('children');
   const [loading, setLoading] = useState(true);
 
   // ---------- Children ----------
   const [children, setChildren] = useState<any[]>([]);
-  const [qText, setQText] = useState("");
+  const [qText, setQText] = useState('');
 
   // Filters (dropdowns with unique values)
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
-    country: "",
-    province: "",
-    city: "",
-    region: "",
-    subRegion: "",
+    country: '',
+    province: '',
+    city: '',
+    region: '',
+    subRegion: '',
   });
 
   // dropdown picker state (for filters)
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerField, setPickerField] = useState<keyof typeof filters>("country");
+  const [pickerField, setPickerField] =
+    useState<keyof typeof filters>('country');
   const [pickerOptions, setPickerOptions] = useState<string[]>([]);
-  const [pickerTitle, setPickerTitle] = useState("");
-  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerTitle, setPickerTitle] = useState('');
+  const [pickerSearch, setPickerSearch] = useState('');
 
   const [childModalOpen, setChildModalOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<any | null>(null);
   const [childDraft, setChildDraft] = useState({
-    firstName: "",
-    lastName: "",
-    age: "",
-    currentClass: "",
-    academicYear: "",
-    parishName: "",
-    parishShepherdNames: "",
-    mainTeacherNames: "",
-    shepherdPhone: "",
-    teacherPhone: "",
-    contactEmail: "",
-    country: "",
-    province: "",
-    city: "",
-    region: "",
-    subRegion: "",
-    identifier: "",
+    firstName: '',
+    lastName: '',
+    age: '',
+    currentClass: '',
+    academicYear: '',
+    parishName: '',
+    parishShepherdNames: '',
+    mainTeacherNames: '',
+    shepherdPhone: '',
+    teacherPhone: '',
+    contactEmail: '',
+    country: '',
+    province: '',
+    city: '',
+    region: '',
+    subRegion: '',
+    identifier: '',
   });
 
   // ---------- Concours ----------
@@ -201,27 +202,31 @@ export default function AdminJeunesse({ navigation }: any) {
 
   // Manage candidates modal (search + click to add)
   const [candidatesOpen, setCandidatesOpen] = useState(false);
-  const [candidatePhase, setCandidatePhase] = useState<Phase>("prelim");
-  const [candidateSearch, setCandidateSearch] = useState("");
-  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [candidatePhase, setCandidatePhase] = useState<Phase>('prelim');
+  const [candidateSearch, setCandidateSearch] = useState('');
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>(
+    [],
+  );
 
   // Passed modal (check passed + average mark -> moves to next phase)
   const [passedOpen, setPassedOpen] = useState(false);
-  const [passedPhase, setPassedPhase] = useState<Phase>("prelim");
-  const [passedSearch, setPassedSearch] = useState("");
-  const [passedMap, setPassedMap] = useState<Record<string, { passed: boolean; average: string }>>({});
+  const [passedPhase, setPassedPhase] = useState<Phase>('prelim');
+  const [passedSearch, setPassedSearch] = useState('');
+  const [passedMap, setPassedMap] = useState<
+    Record<string, { passed: boolean; average: string }>
+  >({});
 
   // Periods per year
   const [periodDraft, setPeriodDraft] = useState({
     year: String(new Date().getFullYear()),
-    prelimStart: "",
-    prelimEnd: "",
-    preselectionStart: "",
-    preselectionEnd: "",
-    selectionStart: "",
-    selectionEnd: "",
-    finalStart: "",
-    finalEnd: "",
+    prelimStart: '',
+    prelimEnd: '',
+    preselectionStart: '',
+    preselectionEnd: '',
+    selectionStart: '',
+    selectionEnd: '',
+    finalStart: '',
+    finalEnd: '',
   });
 
   // ---------- Quiz (MULTI-QUESTIONS) ----------
@@ -234,15 +239,19 @@ export default function AdminJeunesse({ navigation }: any) {
     isActive: boolean;
     questions: QuizQuestion[];
   }>({
-    title: "",
-    durationSec: "60",
+    title: '',
+    durationSec: '60',
     isActive: true,
     questions: [],
   });
 
   const [questionModal, setQuestionModal] = useState(false);
-  const [questionDraft, setQuestionDraft] = useState<QuizQuestion>(emptyQuestion());
-  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [questionDraft, setQuestionDraft] = useState<QuizQuestion>(
+    emptyQuestion(),
+  );
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<
+    number | null
+  >(null);
 
   // ---------- Load ----------
   useEffect(() => {
@@ -257,12 +266,14 @@ export default function AdminJeunesse({ navigation }: any) {
   }, []);
 
   const loadChildren = async () => {
-    const snap = await getDocs(query(collection(db, "jeunesse_children"), orderBy("createdAt", "desc")));
-    setChildren(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const snap = await getDocs(
+      query(collection(db, 'jeunesse_children'), orderBy('createdAt', 'desc')),
+    );
+    setChildren(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
   const loadSettings = async () => {
-    const ref = doc(db, "jeunesse_settings", SETTINGS_DOC);
+    const ref = doc(db, 'jeunesse_settings', SETTINGS_DOC);
     const s = await getDoc(ref);
     const data = s.exists() ? s.data() : {};
     setSettings(data || {});
@@ -271,33 +282,31 @@ export default function AdminJeunesse({ navigation }: any) {
     const y = (data?.years || {})[year] || {};
     setPeriodDraft({
       year,
-      prelimStart: y?.periods?.prelim?.start || "",
-      prelimEnd: y?.periods?.prelim?.end || "",
-      preselectionStart: y?.periods?.preselection?.start || "",
-      preselectionEnd: y?.periods?.preselection?.end || "",
-      selectionStart: y?.periods?.selection?.start || "",
-      selectionEnd: y?.periods?.selection?.end || "",
-      finalStart: y?.periods?.final?.start || "",
-      finalEnd: y?.periods?.final?.end || "",
+      prelimStart: y?.periods?.prelim?.start || '',
+      prelimEnd: y?.periods?.prelim?.end || '',
+      preselectionStart: y?.periods?.preselection?.start || '',
+      preselectionEnd: y?.periods?.preselection?.end || '',
+      selectionStart: y?.periods?.selection?.start || '',
+      selectionEnd: y?.periods?.selection?.end || '',
+      finalStart: y?.periods?.final?.start || '',
+      finalEnd: y?.periods?.final?.end || '',
     });
   };
 
   const loadActiveQuiz = async () => {
-    // Prefer isActive==true newest, else newest overall
-    let snap = await getDocs(
-      query(collection(db, "jeunesse_quizzes"), where("isActive", "==", true), orderBy("createdAt", "desc"), limit(1))
+    const snap = await getDocs(
+      query(
+        collection(db, 'jeunesse_quizzes'),
+        orderBy('createdAt', 'desc'),
+        limit(20),
+      ),
     );
 
-    if (snap.empty) {
-      snap = await getDocs(query(collection(db, "jeunesse_quizzes"), orderBy("createdAt", "desc"), limit(1)));
-    }
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
 
-    if (snap.empty) {
-      setActiveQuiz(null);
-      return;
-    }
-    const d = snap.docs[0];
-    setActiveQuiz({ id: d.id, ...d.data() });
+    // pick newest active, else newest overall
+    const active = list.find(q => q.isActive === true);
+    setActiveQuiz(active || list[0] || null);
   };
 
   // ---------- Filters + Search ----------
@@ -306,18 +315,36 @@ export default function AdminJeunesse({ navigation }: any) {
     let list = [...children];
     const f = filters;
 
-    if (norm(f.country)) list = list.filter((c) => norm(c.country).toLowerCase() === norm(f.country).toLowerCase());
-    if (norm(f.province)) list = list.filter((c) => norm(c.province).toLowerCase() === norm(f.province).toLowerCase());
-    if (norm(f.city)) list = list.filter((c) => norm(c.city).toLowerCase() === norm(f.city).toLowerCase());
-    if (norm(f.region)) list = list.filter((c) => norm(c.region).toLowerCase() === norm(f.region).toLowerCase());
-    if (norm(f.subRegion)) list = list.filter((c) => norm(c.subRegion).toLowerCase() === norm(f.subRegion).toLowerCase());
+    if (norm(f.country))
+      list = list.filter(
+        c => norm(c.country).toLowerCase() === norm(f.country).toLowerCase(),
+      );
+    if (norm(f.province))
+      list = list.filter(
+        c => norm(c.province).toLowerCase() === norm(f.province).toLowerCase(),
+      );
+    if (norm(f.city))
+      list = list.filter(
+        c => norm(c.city).toLowerCase() === norm(f.city).toLowerCase(),
+      );
+    if (norm(f.region))
+      list = list.filter(
+        c => norm(c.region).toLowerCase() === norm(f.region).toLowerCase(),
+      );
+    if (norm(f.subRegion))
+      list = list.filter(
+        c =>
+          norm(c.subRegion).toLowerCase() === norm(f.subRegion).toLowerCase(),
+      );
 
     if (text) {
-      list = list.filter((c) => {
+      list = list.filter(c => {
         const full = `${norm(c.firstName)} ${norm(c.lastName)}`.toLowerCase();
         const id = norm(c.identifier).toLowerCase();
         const parish = norm(c.parishName).toLowerCase();
-        return full.includes(text) || id.includes(text) || parish.includes(text);
+        return (
+          full.includes(text) || id.includes(text) || parish.includes(text)
+        );
       });
     }
 
@@ -325,54 +352,85 @@ export default function AdminJeunesse({ navigation }: any) {
   }, [children, qText, filters]);
 
   // ---------- Unique dropdown values (deduplicated) ----------
-  const uniqueCountries = useMemo(() => uniqSorted(children.map((c) => c.country)), [children]);
+  const uniqueCountries = useMemo(
+    () => uniqSorted(children.map(c => c.country)),
+    [children],
+  );
 
   const uniqueProvinces = useMemo(() => {
-    const base = children.filter((c) => !norm(filters.country) || norm(c.country).toLowerCase() === norm(filters.country).toLowerCase());
-    return uniqSorted(base.map((c) => c.province));
+    const base = children.filter(
+      c =>
+        !norm(filters.country) ||
+        norm(c.country).toLowerCase() === norm(filters.country).toLowerCase(),
+    );
+    return uniqSorted(base.map(c => c.province));
   }, [children, filters.country]);
 
   const uniqueCities = useMemo(() => {
-    const base = children.filter((c) => {
-      const okCountry = !norm(filters.country) || norm(c.country).toLowerCase() === norm(filters.country).toLowerCase();
-      const okProv = !norm(filters.province) || norm(c.province).toLowerCase() === norm(filters.province).toLowerCase();
+    const base = children.filter(c => {
+      const okCountry =
+        !norm(filters.country) ||
+        norm(c.country).toLowerCase() === norm(filters.country).toLowerCase();
+      const okProv =
+        !norm(filters.province) ||
+        norm(c.province).toLowerCase() === norm(filters.province).toLowerCase();
       return okCountry && okProv;
     });
-    return uniqSorted(base.map((c) => c.city));
+    return uniqSorted(base.map(c => c.city));
   }, [children, filters.country, filters.province]);
 
   const uniqueRegions = useMemo(() => {
-    const base = children.filter((c) => {
-      const okCountry = !norm(filters.country) || norm(c.country).toLowerCase() === norm(filters.country).toLowerCase();
-      const okProv = !norm(filters.province) || norm(c.province).toLowerCase() === norm(filters.province).toLowerCase();
-      const okCity = !norm(filters.city) || norm(c.city).toLowerCase() === norm(filters.city).toLowerCase();
+    const base = children.filter(c => {
+      const okCountry =
+        !norm(filters.country) ||
+        norm(c.country).toLowerCase() === norm(filters.country).toLowerCase();
+      const okProv =
+        !norm(filters.province) ||
+        norm(c.province).toLowerCase() === norm(filters.province).toLowerCase();
+      const okCity =
+        !norm(filters.city) ||
+        norm(c.city).toLowerCase() === norm(filters.city).toLowerCase();
       return okCountry && okProv && okCity;
     });
-    return uniqSorted(base.map((c) => c.region));
+    return uniqSorted(base.map(c => c.region));
   }, [children, filters.country, filters.province, filters.city]);
 
   const uniqueSubRegions = useMemo(() => {
-    const base = children.filter((c) => {
-      const okCountry = !norm(filters.country) || norm(c.country).toLowerCase() === norm(filters.country).toLowerCase();
-      const okProv = !norm(filters.province) || norm(c.province).toLowerCase() === norm(filters.province).toLowerCase();
-      const okCity = !norm(filters.city) || norm(c.city).toLowerCase() === norm(filters.city).toLowerCase();
-      const okRegion = !norm(filters.region) || norm(c.region).toLowerCase() === norm(filters.region).toLowerCase();
+    const base = children.filter(c => {
+      const okCountry =
+        !norm(filters.country) ||
+        norm(c.country).toLowerCase() === norm(filters.country).toLowerCase();
+      const okProv =
+        !norm(filters.province) ||
+        norm(c.province).toLowerCase() === norm(filters.province).toLowerCase();
+      const okCity =
+        !norm(filters.city) ||
+        norm(c.city).toLowerCase() === norm(filters.city).toLowerCase();
+      const okRegion =
+        !norm(filters.region) ||
+        norm(c.region).toLowerCase() === norm(filters.region).toLowerCase();
       return okCountry && okProv && okCity && okRegion;
     });
-    return uniqSorted(base.map((c) => c.subRegion));
-  }, [children, filters.country, filters.province, filters.city, filters.region]);
+    return uniqSorted(base.map(c => c.subRegion));
+  }, [
+    children,
+    filters.country,
+    filters.province,
+    filters.city,
+    filters.region,
+  ]);
 
   const openPicker = (field: keyof typeof filters) => {
     Keyboard.dismiss();
-    setPickerSearch("");
+    setPickerSearch('');
     setPickerField(field);
 
     const titleMap: Record<string, string> = {
-      country: t("adminJeunesse.children.country"),
-      province: t("adminJeunesse.children.province"),
-      city: t("adminJeunesse.children.city"),
-      region: t("adminJeunesse.children.region"),
-      subRegion: t("adminJeunesse.children.subRegion"),
+      country: t('adminJeunesse.children.country'),
+      province: t('adminJeunesse.children.province'),
+      city: t('adminJeunesse.children.city'),
+      region: t('adminJeunesse.children.region'),
+      subRegion: t('adminJeunesse.children.subRegion'),
     };
 
     const optionsMap: Record<string, string[]> = {
@@ -389,11 +447,21 @@ export default function AdminJeunesse({ navigation }: any) {
   };
 
   const applyPickedValue = (value: string) => {
-    setFilters((s) => {
-      if (pickerField === "country") return { country: value, province: "", city: "", region: "", subRegion: "" };
-      if (pickerField === "province") return { ...s, province: value, city: "", region: "", subRegion: "" };
-      if (pickerField === "city") return { ...s, city: value, region: "", subRegion: "" };
-      if (pickerField === "region") return { ...s, region: value, subRegion: "" };
+    setFilters(s => {
+      if (pickerField === 'country')
+        return {
+          country: value,
+          province: '',
+          city: '',
+          region: '',
+          subRegion: '',
+        };
+      if (pickerField === 'province')
+        return { ...s, province: value, city: '', region: '', subRegion: '' };
+      if (pickerField === 'city')
+        return { ...s, city: value, region: '', subRegion: '' };
+      if (pickerField === 'region')
+        return { ...s, region: value, subRegion: '' };
       return { ...s, subRegion: value };
     });
     setPickerOpen(false);
@@ -403,22 +471,22 @@ export default function AdminJeunesse({ navigation }: any) {
   const openAddChild = () => {
     setEditingChild(null);
     setChildDraft({
-      firstName: "",
-      lastName: "",
-      age: "",
-      currentClass: "",
-      academicYear: "",
-      parishName: "",
-      parishShepherdNames: "",
-      mainTeacherNames: "",
-      shepherdPhone: "",
-      teacherPhone: "",
-      contactEmail: "",
-      country: "",
-      province: "",
-      city: "",
-      region: "",
-      subRegion: "",
+      firstName: '',
+      lastName: '',
+      age: '',
+      currentClass: '',
+      academicYear: '',
+      parishName: '',
+      parishShepherdNames: '',
+      mainTeacherNames: '',
+      shepherdPhone: '',
+      teacherPhone: '',
+      contactEmail: '',
+      country: '',
+      province: '',
+      city: '',
+      region: '',
+      subRegion: '',
       identifier: genIdentifier(),
     });
     setChildModalOpen(true);
@@ -429,7 +497,7 @@ export default function AdminJeunesse({ navigation }: any) {
     setChildDraft({
       firstName: norm(c.firstName),
       lastName: norm(c.lastName),
-      age: String(c.age || ""),
+      age: String(c.age || ''),
       currentClass: norm(c.currentClass),
       academicYear: norm(c.academicYear),
       parishName: norm(c.parishName),
@@ -449,8 +517,15 @@ export default function AdminJeunesse({ navigation }: any) {
   };
 
   const saveChild = async () => {
-    if (!childDraft.firstName.trim() || !childDraft.lastName.trim() || !childDraft.identifier.trim()) {
-      Alert.alert(t("adminJeunesse.title"), t("adminJeunesse.children.required"));
+    if (
+      !childDraft.firstName.trim() ||
+      !childDraft.lastName.trim() ||
+      !childDraft.identifier.trim()
+    ) {
+      Alert.alert(
+        t('adminJeunesse.title'),
+        t('adminJeunesse.children.required'),
+      );
       return;
     }
 
@@ -462,9 +537,9 @@ export default function AdminJeunesse({ navigation }: any) {
       };
 
       if (editingChild) {
-        await updateDoc(doc(db, "jeunesse_children", editingChild.id), payload);
+        await updateDoc(doc(db, 'jeunesse_children', editingChild.id), payload);
       } else {
-        await addDoc(collection(db, "jeunesse_children"), {
+        await addDoc(collection(db, 'jeunesse_children'), {
           ...payload,
           createdAt: serverTimestamp(),
         });
@@ -473,22 +548,22 @@ export default function AdminJeunesse({ navigation }: any) {
       setChildModalOpen(false);
       await loadChildren();
     } catch (e: any) {
-      Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
+      Alert.alert(t('adminJeunesse.title'), e?.message || 'Error');
     }
   };
 
   const deleteChild = async (c: any) => {
-    Alert.alert(t("adminJeunesse.title"), t("common.delete") + "?", [
-      { text: t("common.cancel") },
+    Alert.alert(t('adminJeunesse.title'), t('common.delete') + '?', [
+      { text: t('common.cancel') },
       {
-        text: t("common.delete"),
-        style: "destructive",
+        text: t('common.delete'),
+        style: 'destructive',
         onPress: async () => {
           try {
-            await deleteDoc(doc(db, "jeunesse_children", c.id));
+            await deleteDoc(doc(db, 'jeunesse_children', c.id));
             await loadChildren();
           } catch (e: any) {
-            Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
+            Alert.alert(t('adminJeunesse.title'), e?.message || 'Error');
           }
         },
       },
@@ -500,7 +575,7 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const savePeriods = async () => {
     try {
-      const ref = doc(db, "jeunesse_settings", SETTINGS_DOC);
+      const ref = doc(db, 'jeunesse_settings', SETTINGS_DOC);
       const year = periodDraft.year.trim() || String(new Date().getFullYear());
 
       const currentYears = settings?.years || {};
@@ -518,10 +593,22 @@ export default function AdminJeunesse({ navigation }: any) {
           [year]: {
             ...currentYear,
             periods: {
-              prelim: { start: periodDraft.prelimStart.trim(), end: periodDraft.prelimEnd.trim() },
-              preselection: { start: periodDraft.preselectionStart.trim(), end: periodDraft.preselectionEnd.trim() },
-              selection: { start: periodDraft.selectionStart.trim(), end: periodDraft.selectionEnd.trim() },
-              final: { start: periodDraft.finalStart.trim(), end: periodDraft.finalEnd.trim() },
+              prelim: {
+                start: periodDraft.prelimStart.trim(),
+                end: periodDraft.prelimEnd.trim(),
+              },
+              preselection: {
+                start: periodDraft.preselectionStart.trim(),
+                end: periodDraft.preselectionEnd.trim(),
+              },
+              selection: {
+                start: periodDraft.selectionStart.trim(),
+                end: periodDraft.selectionEnd.trim(),
+              },
+              final: {
+                start: periodDraft.finalStart.trim(),
+                end: periodDraft.finalEnd.trim(),
+              },
             },
             concours: currentConcours,
           },
@@ -532,9 +619,9 @@ export default function AdminJeunesse({ navigation }: any) {
       await setDoc(ref, next, { merge: true });
       setConcoursOpen(false);
       await loadSettings();
-      Alert.alert(t("adminJeunesse.title"), t("adminJeunesse.concours.saved"));
+      Alert.alert(t('adminJeunesse.title'), t('adminJeunesse.concours.saved'));
     } catch (e: any) {
-      Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
+      Alert.alert(t('adminJeunesse.title'), e?.message || 'Error');
     }
   };
 
@@ -556,7 +643,7 @@ export default function AdminJeunesse({ navigation }: any) {
     const { concours } = getYearData();
     const ids: string[] = (concours?.[phase]?.candidates || []) as string[];
     setCandidatePhase(phase);
-    setCandidateSearch("");
+    setCandidateSearch('');
     setSelectedCandidateIds(ids);
     setCandidatesOpen(true);
   };
@@ -564,7 +651,7 @@ export default function AdminJeunesse({ navigation }: any) {
   const saveCandidates = async () => {
     try {
       const { year, y, concours } = getYearData();
-      const ref = doc(db, "jeunesse_settings", SETTINGS_DOC);
+      const ref = doc(db, 'jeunesse_settings', SETTINGS_DOC);
 
       const next = {
         years: {
@@ -586,20 +673,23 @@ export default function AdminJeunesse({ navigation }: any) {
       await setDoc(ref, next, { merge: true });
       setCandidatesOpen(false);
       await loadSettings();
-      Alert.alert(t("adminJeunesse.title"), t("adminJeunesse.concours.saved"));
+      Alert.alert(t('adminJeunesse.title'), t('adminJeunesse.concours.saved'));
     } catch (e: any) {
-      Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
+      Alert.alert(t('adminJeunesse.title'), e?.message || 'Error');
     }
   };
 
-  const selectedCandidateSet = useMemo(() => new Set(selectedCandidateIds), [selectedCandidateIds]);
+  const selectedCandidateSet = useMemo(
+    () => new Set(selectedCandidateIds),
+    [selectedCandidateIds],
+  );
 
   const candidatePool = useMemo(() => {
     const list = filteredChildren;
     const text = candidateSearch.trim().toLowerCase();
     if (!text) return list;
 
-    return list.filter((c) => {
+    return list.filter(c => {
       const full = `${norm(c.firstName)} ${norm(c.lastName)}`.toLowerCase();
       const id = norm(c.identifier).toLowerCase();
       const parish = norm(c.parishName).toLowerCase();
@@ -609,16 +699,16 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const addCandidate = (childId: string) => {
     if (selectedCandidateSet.has(childId)) return;
-    setSelectedCandidateIds((prev) => [childId, ...prev]);
+    setSelectedCandidateIds(prev => [childId, ...prev]);
   };
 
   const removeCandidate = (childId: string) => {
-    setSelectedCandidateIds((prev) => prev.filter((id) => id !== childId));
+    setSelectedCandidateIds(prev => prev.filter(id => id !== childId));
   };
 
   const selectedCandidateObjects = useMemo(() => {
-    const map = new Map(children.map((c) => [c.id, c]));
-    return selectedCandidateIds.map((id) => map.get(id)).filter(Boolean);
+    const map = new Map(children.map(c => [c.id, c]));
+    return selectedCandidateIds.map(id => map.get(id)).filter(Boolean);
   }, [children, selectedCandidateIds]);
 
   // ====== Passed workflow ======
@@ -627,33 +717,39 @@ export default function AdminJeunesse({ navigation }: any) {
     const { concours } = getYearData();
     const ids: string[] = (concours?.[phase]?.candidates || []) as string[];
 
-    const existingPassed = (concours?.[phase]?.passed || {}) as Record<string, any>;
+    const existingPassed = (concours?.[phase]?.passed || {}) as Record<
+      string,
+      any
+    >;
 
     const init: Record<string, { passed: boolean; average: string }> = {};
-    ids.forEach((id) => {
+    ids.forEach(id => {
       const p = existingPassed[id];
       init[id] = {
         passed: !!p?.passed,
-        average: p?.average != null ? String(p.average) : "",
+        average: p?.average != null ? String(p.average) : '',
       };
     });
 
     setPassedPhase(phase);
-    setPassedSearch("");
+    setPassedSearch('');
     setPassedMap(init);
     setPassedOpen(true);
   };
 
   const togglePassed = (childId: string) => {
-    setPassedMap((m) => ({
+    setPassedMap(m => ({
       ...m,
-      [childId]: { passed: !m?.[childId]?.passed, average: m?.[childId]?.average ?? "" },
+      [childId]: {
+        passed: !m?.[childId]?.passed,
+        average: m?.[childId]?.average ?? '',
+      },
     }));
   };
 
   const setAverage = (childId: string, v: string) => {
-    const cleaned = v.replace(/[^\d.]/g, "");
-    setPassedMap((m) => ({
+    const cleaned = v.replace(/[^\d.]/g, '');
+    setPassedMap(m => ({
       ...m,
       [childId]: { passed: m?.[childId]?.passed ?? false, average: cleaned },
     }));
@@ -661,14 +757,15 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const passedList = useMemo(() => {
     const { concours } = getYearData();
-    const ids: string[] = (concours?.[passedPhase]?.candidates || []) as string[];
+    const ids: string[] = (concours?.[passedPhase]?.candidates ||
+      []) as string[];
 
-    const map = new Map(children.map((c) => [c.id, c]));
-    let list = ids.map((id) => map.get(id)).filter(Boolean) as any[];
+    const map = new Map(children.map(c => [c.id, c]));
+    let list = ids.map(id => map.get(id)).filter(Boolean) as any[];
 
     const text = passedSearch.trim().toLowerCase();
     if (text) {
-      list = list.filter((c) => {
+      list = list.filter(c => {
         const full = `${norm(c.firstName)} ${norm(c.lastName)}`.toLowerCase();
         const id = norm(c.identifier).toLowerCase();
         return full.includes(text) || id.includes(text);
@@ -680,20 +777,28 @@ export default function AdminJeunesse({ navigation }: any) {
   const savePassedAndMoveNext = async () => {
     try {
       const { year, y, concours } = getYearData();
-      const ref = doc(db, "jeunesse_settings", SETTINGS_DOC);
+      const ref = doc(db, 'jeunesse_settings', SETTINGS_DOC);
 
       const from = passedPhase;
       const to = nextPhase(from);
 
       if (!to) {
-        Alert.alert(t("adminJeunesse.title"), "This is the final phase. No next concours to move to.");
+        Alert.alert(
+          t('adminJeunesse.title'),
+          'This is the final phase. No next concours to move to.',
+        );
         return;
       }
 
-      const fromCandidates: string[] = (concours?.[from]?.candidates || []) as string[];
-      const toCandidatesSet = new Set<string>((concours?.[to]?.candidates || []) as string[]);
+      const fromCandidates: string[] = (concours?.[from]?.candidates ||
+        []) as string[];
+      const toCandidatesSet = new Set<string>(
+        (concours?.[to]?.candidates || []) as string[],
+      );
 
-      const nextFromPassed: Record<string, any> = { ...(concours?.[from]?.passed || {}) };
+      const nextFromPassed: Record<string, any> = {
+        ...(concours?.[from]?.passed || {}),
+      };
       const toAdd: string[] = [];
 
       for (const id of fromCandidates) {
@@ -712,17 +817,19 @@ export default function AdminJeunesse({ navigation }: any) {
             toAdd.push(id);
           }
 
-          const child = children.find((c) => c.id === id);
+          const child = children.find(c => c.id === id);
           if (child?.identifier) {
             const resultId = `${year}_${to}_${id}`;
             await setDoc(
-              doc(db, "jeunesse_results", resultId),
+              doc(db, 'jeunesse_results', resultId),
               {
                 year,
                 phase: to,
                 childId: id,
                 identifier: norm(child.identifier),
-                fullName: `${norm(child.firstName)} ${norm(child.lastName)}`.trim(),
+                fullName: `${norm(child.firstName)} ${norm(
+                  child.lastName,
+                )}`.trim(),
                 country: norm(child.country),
                 province: norm(child.province),
                 city: norm(child.city),
@@ -730,7 +837,7 @@ export default function AdminJeunesse({ navigation }: any) {
                 movedFrom: from,
                 updatedAt: serverTimestamp(),
               },
-              { merge: true }
+              { merge: true },
             );
           }
         }
@@ -762,9 +869,12 @@ export default function AdminJeunesse({ navigation }: any) {
       setPassedOpen(false);
       await loadSettings();
 
-      Alert.alert(t("adminJeunesse.title"), `Saved. Moved ${toAdd.length} candidate(s) to ${PHASE_LABEL[to]}.`);
+      Alert.alert(
+        t('adminJeunesse.title'),
+        `Saved. Moved ${toAdd.length} candidate(s) to ${PHASE_LABEL[to]}.`,
+      );
     } catch (e: any) {
-      Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
+      Alert.alert(t('adminJeunesse.title'), e?.message || 'Error');
     }
   };
 
@@ -774,7 +884,7 @@ export default function AdminJeunesse({ navigation }: any) {
     const multi = normalizeOldQuizToMulti(q);
 
     setQuizDraft({
-      title: multi.title || "",
+      title: multi.title || '',
       durationSec: String(multi.durationSec || 60),
       isActive: !!multi.isActive,
       questions: multi.questions || [],
@@ -793,7 +903,7 @@ export default function AdminJeunesse({ navigation }: any) {
     setQuestionDraft({
       id: q.id,
       text: norm(q.text),
-      options: Array.isArray(q.options) ? [...q.options] : ["", "", "", ""],
+      options: Array.isArray(q.options) ? [...q.options] : ['', '', '', ''],
       answerIndex: Number.isFinite(q.answerIndex) ? q.answerIndex : 0,
     });
     setEditingQuestionIndex(index);
@@ -802,17 +912,20 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const saveQuestion = () => {
     if (!questionDraft.text.trim()) {
-      Alert.alert(t("adminJeunesse.title"), "Question text required");
+      Alert.alert(t('adminJeunesse.title'), 'Question text required');
       return;
     }
-    const opts = (questionDraft.options || []).map((x) => norm(x));
+    const opts = (questionDraft.options || []).map(x => norm(x));
     if (opts.filter(Boolean).length < 2) {
-      Alert.alert(t("adminJeunesse.title"), "Provide at least 2 options");
+      Alert.alert(t('adminJeunesse.title'), 'Provide at least 2 options');
       return;
     }
     const idx = Number(questionDraft.answerIndex || 0);
     if (idx < 0 || idx > 3) {
-      Alert.alert(t("adminJeunesse.title"), "Correct answer index must be 0 - 3");
+      Alert.alert(
+        t('adminJeunesse.title'),
+        'Correct answer index must be 0 - 3',
+      );
       return;
     }
 
@@ -820,7 +933,7 @@ export default function AdminJeunesse({ navigation }: any) {
     const cleaned: QuizQuestion = {
       id: questionDraft.id || emptyQuestion().id,
       text: questionDraft.text.trim(),
-      options: [opts[0] || "", opts[1] || "", opts[2] || "", opts[3] || ""],
+      options: [opts[0] || '', opts[1] || '', opts[2] || '', opts[3] || ''],
       answerIndex: idx,
     };
 
@@ -830,20 +943,20 @@ export default function AdminJeunesse({ navigation }: any) {
       list.push(cleaned);
     }
 
-    setQuizDraft((s) => ({ ...s, questions: list }));
+    setQuizDraft(s => ({ ...s, questions: list }));
     setQuestionModal(false);
   };
 
   const deleteQuestion = (index: number) => {
-    Alert.alert(t("adminJeunesse.title"), "Delete this question?", [
-      { text: t("common.cancel") },
+    Alert.alert(t('adminJeunesse.title'), 'Delete this question?', [
+      { text: t('common.cancel') },
       {
-        text: t("common.delete"),
-        style: "destructive",
+        text: t('common.delete'),
+        style: 'destructive',
         onPress: () => {
           const list = [...(quizDraft.questions || [])];
           list.splice(index, 1);
-          setQuizDraft((s) => ({ ...s, questions: list }));
+          setQuizDraft(s => ({ ...s, questions: list }));
         },
       },
     ]);
@@ -851,21 +964,29 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const saveQuiz = async () => {
     if (!quizDraft.title.trim()) {
-      Alert.alert(t("adminJeunesse.title"), "Quiz title required");
+      Alert.alert(t('adminJeunesse.title'), 'Quiz title required');
       return;
     }
     if (!quizDraft.questions.length) {
-      Alert.alert(t("adminJeunesse.title"), "Add at least one question");
+      Alert.alert(t('adminJeunesse.title'), 'Add at least one question');
       return;
     }
 
     try {
       // if you set this quiz active, deactivate others
       if (quizDraft.isActive) {
-        const snap = await getDocs(query(collection(db, "jeunesse_quizzes"), where("isActive", "==", true)));
+        const snap = await getDocs(
+          query(
+            collection(db, 'jeunesse_quizzes'),
+            where('isActive', '==', true),
+          ),
+        );
         for (const d of snap.docs) {
           if (d.id !== activeQuiz?.id) {
-            await updateDoc(doc(db, "jeunesse_quizzes", d.id), { isActive: false, updatedAt: serverTimestamp() });
+            await updateDoc(doc(db, 'jeunesse_quizzes', d.id), {
+              isActive: false,
+              updatedAt: serverTimestamp(),
+            });
           }
         }
       }
@@ -879,33 +1000,46 @@ export default function AdminJeunesse({ navigation }: any) {
       };
 
       if (activeQuiz?.id) {
-        await updateDoc(doc(db, "jeunesse_quizzes", activeQuiz.id), payload);
+        await updateDoc(doc(db, 'jeunesse_quizzes', activeQuiz.id), payload);
       } else {
-        await addDoc(collection(db, "jeunesse_quizzes"), { ...payload, createdAt: serverTimestamp() });
+        await addDoc(collection(db, 'jeunesse_quizzes'), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
       }
 
       setQuizOpen(false);
       await loadActiveQuiz();
-      Alert.alert(t("adminJeunesse.title"), t("adminJeunesse.quiz.saved"));
+      Alert.alert(t('adminJeunesse.title'), t('adminJeunesse.quiz.saved'));
     } catch (e: any) {
-      Alert.alert(t("adminJeunesse.title"), e?.message || "Error");
+      Alert.alert(t('adminJeunesse.title'), e?.message || 'Error');
     }
   };
 
   // ---------- UI helpers ----------
   const HeroSubtitle = () => {
     const total = children.length;
-    if (tab === "children") return `${t("adminJeunesse.children.total")}: ${total}`;
-    if (tab === "concours") return "Set periods, candidates, and move passed candidates to next concours";
-    return t("adminJeunesse.subtitle");
+    if (tab === 'children')
+      return `${t('adminJeunesse.children.total')}: ${total}`;
+    if (tab === 'concours')
+      return 'Set periods, candidates, and move passed candidates to next concours';
+    return t('adminJeunesse.subtitle');
   };
 
   const renderChild = ({ item }: any) => {
     return (
-      <TouchableOpacity style={styles.card} activeOpacity={0.92} onPress={() => openEditChild(item)}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.92}
+        onPress={() => openEditChild(item)}
+      >
         <View style={styles.cardLeft}>
           <View style={styles.avatarFallback}>
-            <Icon name="school-outline" size={20} color={COLORS.light.primary} />
+            <Icon
+              name="school-outline"
+              size={20}
+              color={COLORS.light.primary}
+            />
           </View>
         </View>
 
@@ -915,33 +1049,45 @@ export default function AdminJeunesse({ navigation }: any) {
               {item.firstName} {item.lastName}
             </Text>
 
-            <View style={[styles.badgePill, { backgroundColor: "rgba(47,165,169,0.12)" }]}>
-              <Text style={[styles.badgeText, { color: "#0F766E" }]} numberOfLines={1}>
-                {t("adminJeunesse.children.id")}: {item.identifier || "—"}
+            <View
+              style={[
+                styles.badgePill,
+                { backgroundColor: 'rgba(47,165,169,0.12)' },
+              ]}
+            >
+              <Text
+                style={[styles.badgeText, { color: '#0F766E' }]}
+                numberOfLines={1}
+              >
+                {t('adminJeunesse.children.id')}: {item.identifier || '—'}
               </Text>
             </View>
           </View>
 
           <Text style={styles.email} numberOfLines={1}>
-            {t("adminJeunesse.children.parish")}: {item.parishName || "—"}
+            {t('adminJeunesse.children.parish')}: {item.parishName || '—'}
           </Text>
 
           <View style={styles.metaRow}>
             <Text style={styles.metaText} numberOfLines={1}>
-              {t("adminJeunesse.children.age")}: {item.age || "—"} · {t("adminJeunesse.children.class")}:{" "}
-              {item.currentClass || "—"}
+              {t('adminJeunesse.children.age')}: {item.age || '—'} ·{' '}
+              {t('adminJeunesse.children.class')}: {item.currentClass || '—'}
             </Text>
           </View>
 
           <View style={styles.metaRow}>
             <Text style={styles.metaText} numberOfLines={1}>
-              {t("adminJeunesse.children.country")}: {item.country || "—"} · {t("adminJeunesse.children.city")}:{" "}
-              {item.city || "—"}
+              {t('adminJeunesse.children.country')}: {item.country || '—'} ·{' '}
+              {t('adminJeunesse.children.city')}: {item.city || '—'}
             </Text>
           </View>
         </View>
 
-        <TouchableOpacity onPress={() => deleteChild(item)} style={styles.trashBtn} activeOpacity={0.9}>
+        <TouchableOpacity
+          onPress={() => deleteChild(item)}
+          style={styles.trashBtn}
+          activeOpacity={0.9}
+        >
           <Icon name="trash-outline" size={18} color="#111" />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -950,47 +1096,68 @@ export default function AdminJeunesse({ navigation }: any) {
 
   const ConcoursCard = () => {
     const { concours } = getYearData();
-    const phaseCount = (p: Phase) => ((concours?.[p]?.candidates || []) as string[]).length;
+    const phaseCount = (p: Phase) =>
+      ((concours?.[p]?.candidates || []) as string[]).length;
 
     return (
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Concours</Text>
 
         <Text style={styles.helperText}>
-          Year: {periodDraft.year} · Use “Candidates” to select participants, then “Passed → Next” to move them forward.
+          Year: {periodDraft.year} · Use “Candidates” to select participants,
+          then “Passed → Next” to move them forward.
         </Text>
 
         <View style={{ height: 12 }} />
 
-        {PHASES.map((p) => (
+        {PHASES.map(p => (
           <View key={p} style={styles.concoursBox}>
             <View style={{ flex: 1 }}>
               <Text style={styles.roomName}>{PHASE_LABEL[p]}</Text>
               <Text style={styles.roomSub}>
-                Candidates: {phaseCount(p)} · Period:{" "}
-                {p === "prelim"
-                  ? `${periodDraft.prelimStart || "—"} → ${periodDraft.prelimEnd || "—"}`
-                  : p === "preselection"
-                  ? `${periodDraft.preselectionStart || "—"} → ${periodDraft.preselectionEnd || "—"}`
-                  : p === "selection"
-                  ? `${periodDraft.selectionStart || "—"} → ${periodDraft.selectionEnd || "—"}`
-                  : `${periodDraft.finalStart || "—"} → ${periodDraft.finalEnd || "—"}`}
+                Candidates: {phaseCount(p)} · Period:{' '}
+                {p === 'prelim'
+                  ? `${periodDraft.prelimStart || '—'} → ${
+                      periodDraft.prelimEnd || '—'
+                    }`
+                  : p === 'preselection'
+                  ? `${periodDraft.preselectionStart || '—'} → ${
+                      periodDraft.preselectionEnd || '—'
+                    }`
+                  : p === 'selection'
+                  ? `${periodDraft.selectionStart || '—'} → ${
+                      periodDraft.selectionEnd || '—'
+                    }`
+                  : `${periodDraft.finalStart || '—'} → ${
+                      periodDraft.finalEnd || '—'
+                    }`}
               </Text>
             </View>
 
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity onPress={() => openCandidates(p)} style={styles.smallIconBtn} activeOpacity={0.9}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => openCandidates(p)}
+                style={styles.smallIconBtn}
+                activeOpacity={0.9}
+              >
                 <Icon name="people-outline" size={18} color="#111" />
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => openPassed(p)} style={styles.smallIconBtn} activeOpacity={0.9}>
+              <TouchableOpacity
+                onPress={() => openPassed(p)}
+                style={styles.smallIconBtn}
+                activeOpacity={0.9}
+              >
                 <Icon name="checkmark-done-outline" size={18} color="#111" />
               </TouchableOpacity>
             </View>
           </View>
         ))}
 
-        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 14 }]} onPress={openConcours}>
+        <TouchableOpacity
+          style={[styles.primaryBtn, { marginTop: 14 }]}
+          onPress={openConcours}
+        >
           <Icon name="calendar-outline" size={16} color="#fff" />
           <Text style={styles.primaryText}>Set Periods</Text>
         </TouchableOpacity>
@@ -1003,44 +1170,63 @@ export default function AdminJeunesse({ navigation }: any) {
       {/* HERO */}
       <View style={styles.hero}>
         <View style={styles.heroTop}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+          >
             <Icon name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>{t("adminJeunesse.title")}</Text>
+            <Text style={styles.heroTitle}>{t('adminJeunesse.title')}</Text>
             <Text style={styles.heroSub} numberOfLines={1}>
               {HeroSubtitle()}
             </Text>
           </View>
 
-          {tab === "children" ? (
-            <TouchableOpacity onPress={openAddChild} style={styles.heroAction} activeOpacity={0.9}>
+          {tab === 'children' ? (
+            <TouchableOpacity
+              onPress={openAddChild}
+              style={styles.heroAction}
+              activeOpacity={0.9}
+            >
               <Icon name="add" size={20} color="#111" />
             </TouchableOpacity>
-          ) : tab === "concours" ? (
-            <TouchableOpacity onPress={openConcours} style={styles.heroAction} activeOpacity={0.9}>
+          ) : tab === 'concours' ? (
+            <TouchableOpacity
+              onPress={openConcours}
+              style={styles.heroAction}
+              activeOpacity={0.9}
+            >
               <Icon name="calendar-outline" size={20} color="#111" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={openQuiz} style={styles.heroAction} activeOpacity={0.9}>
+            <TouchableOpacity
+              onPress={openQuiz}
+              style={styles.heroAction}
+              activeOpacity={0.9}
+            >
               <Icon name="help-circle-outline" size={20} color="#111" />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Search (for children tab) */}
-        {tab === "children" ? (
+        {tab === 'children' ? (
           <View style={styles.searchRow}>
             <Icon name="search" size={16} color="rgba(255,255,255,0.75)" />
             <TextInput
               value={qText}
               onChangeText={setQText}
-              placeholder={`${t("common.search")}…`}
+              placeholder={`${t('common.search')}…`}
               placeholderTextColor="rgba(255,255,255,0.55)"
               style={styles.searchInput}
             />
-            <TouchableOpacity onPress={() => setFiltersOpen(true)} style={styles.filterBtn} activeOpacity={0.9}>
+            <TouchableOpacity
+              onPress={() => setFiltersOpen(true)}
+              style={styles.filterBtn}
+              activeOpacity={0.9}
+            >
               <Icon name="options-outline" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -1048,9 +1234,21 @@ export default function AdminJeunesse({ navigation }: any) {
 
         {/* Tabs */}
         <View style={styles.pills}>
-          <Pill label={t("adminJeunesse.tabs.children")} active={tab === "children"} onPress={() => setTab("children")} />
-          <Pill label={t("adminJeunesse.tabs.concours")} active={tab === "concours"} onPress={() => setTab("concours")} />
-          <Pill label={t("adminJeunesse.tabs.quiz")} active={tab === "quiz"} onPress={() => setTab("quiz")} />
+          <Pill
+            label={t('adminJeunesse.tabs.children')}
+            active={tab === 'children'}
+            onPress={() => setTab('children')}
+          />
+          <Pill
+            label={t('adminJeunesse.tabs.concours')}
+            active={tab === 'concours'}
+            onPress={() => setTab('concours')}
+          />
+          <Pill
+            label={t('adminJeunesse.tabs.quiz')}
+            active={tab === 'quiz'}
+            onPress={() => setTab('quiz')}
+          />
         </View>
       </View>
 
@@ -1059,35 +1257,51 @@ export default function AdminJeunesse({ navigation }: any) {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.light.primary} />
         </View>
-      ) : tab === "children" ? (
+      ) : tab === 'children' ? (
         <FlatList
           data={filteredChildren}
-          keyExtractor={(it) => it.id}
+          keyExtractor={it => it.id}
           renderItem={renderChild}
           contentContainerStyle={{ padding: 16, paddingBottom: 30 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Icon name="school-outline" size={54} color="#C7C7CC" />
-              <Text style={styles.emptyTitle}>{t("adminJeunesse.children.emptyTitle")}</Text>
-              <Text style={styles.emptySub}>{t("adminJeunesse.children.emptySub")}</Text>
+              <Text style={styles.emptyTitle}>
+                {t('adminJeunesse.children.emptyTitle')}
+              </Text>
+              <Text style={styles.emptySub}>
+                {t('adminJeunesse.children.emptySub')}
+              </Text>
             </View>
           }
         />
-      ) : tab === "concours" ? (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+      ) : tab === 'concours' ? (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 30 }}
+          showsVerticalScrollIndicator={false}
+        >
           <ConcoursCard />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 30 }}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{t("adminJeunesse.quiz.title")}</Text>
+            <Text style={styles.sectionTitle}>
+              {t('adminJeunesse.quiz.title')}
+            </Text>
 
             {!activeQuiz ? (
               <View style={styles.emptyMini}>
                 <Icon name="help-circle-outline" size={44} color="#C7C7CC" />
-                <Text style={styles.emptyTitle}>{t("adminJeunesse.quiz.emptyTitle")}</Text>
-                <Text style={styles.emptySub}>{t("adminJeunesse.quiz.emptySub")}</Text>
+                <Text style={styles.emptyTitle}>
+                  {t('adminJeunesse.quiz.emptyTitle')}
+                </Text>
+                <Text style={styles.emptySub}>
+                  {t('adminJeunesse.quiz.emptySub')}
+                </Text>
               </View>
             ) : (
               <View style={{ gap: 10 }}>
@@ -1097,56 +1311,109 @@ export default function AdminJeunesse({ navigation }: any) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.roomName} numberOfLines={2}>
-                      {activeQuiz.title || "Quiz"}
+                      {activeQuiz.title || 'Quiz'}
                     </Text>
                     <Text style={styles.roomSub} numberOfLines={2}>
-                      Questions: {Array.isArray(activeQuiz.questions) ? activeQuiz.questions.length : 1} · Duration:{" "}
-                      {activeQuiz.durationSec || 60}s · Active: {activeQuiz.isActive ? "YES" : "NO"}
+                      Questions:{' '}
+                      {Array.isArray(activeQuiz.questions)
+                        ? activeQuiz.questions.length
+                        : 1}{' '}
+                      · Duration: {activeQuiz.durationSec || 60}s · Active:{' '}
+                      {activeQuiz.isActive ? 'YES' : 'NO'}
                     </Text>
                   </View>
                 </View>
               </View>
             )}
 
-            <TouchableOpacity style={[styles.primaryBtn, { marginTop: 14 }]} onPress={openQuiz}>
+            <TouchableOpacity
+              style={[styles.primaryBtn, { marginTop: 14 }]}
+              onPress={openQuiz}
+            >
               <Icon name="create-outline" size={16} color="#fff" />
-              <Text style={styles.primaryText}>{t("adminJeunesse.quiz.manage")}</Text>
+              <Text style={styles.primaryText}>
+                {t('adminJeunesse.quiz.manage')}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       )}
 
       {/* ================= FILTERS MODAL ================= */}
-      <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
+      <Modal
+        visible={filtersOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFiltersOpen(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setFiltersOpen(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setFiltersOpen(false))}
+          />
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>{t("common.filter")}</Text>
-                <Text style={styles.modalSub}>Pick from existing values (deduplicated)</Text>
+                <Text style={styles.modalTitle}>{t('common.filter')}</Text>
+                <Text style={styles.modalSub}>
+                  Pick from existing values (deduplicated)
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => setFiltersOpen(false)} style={styles.modalCloseBtn}>
+              <TouchableOpacity
+                onPress={() => setFiltersOpen(false)}
+                style={styles.modalCloseBtn}
+              >
                 <Icon name="close" size={18} color="#111" />
               </TouchableOpacity>
             </View>
 
-            <DropdownField label={t("adminJeunesse.children.country")} value={filters.country} onPress={() => openPicker("country")} />
-            <DropdownField label={t("adminJeunesse.children.province")} value={filters.province} onPress={() => openPicker("province")} />
-            <DropdownField label={t("adminJeunesse.children.city")} value={filters.city} onPress={() => openPicker("city")} />
-            <DropdownField label={t("adminJeunesse.children.region")} value={filters.region} onPress={() => openPicker("region")} />
-            <DropdownField label={t("adminJeunesse.children.subRegion")} value={filters.subRegion} onPress={() => openPicker("subRegion")} />
+            <DropdownField
+              label={t('adminJeunesse.children.country')}
+              value={filters.country}
+              onPress={() => openPicker('country')}
+            />
+            <DropdownField
+              label={t('adminJeunesse.children.province')}
+              value={filters.province}
+              onPress={() => openPicker('province')}
+            />
+            <DropdownField
+              label={t('adminJeunesse.children.city')}
+              value={filters.city}
+              onPress={() => openPicker('city')}
+            />
+            <DropdownField
+              label={t('adminJeunesse.children.region')}
+              value={filters.region}
+              onPress={() => openPicker('region')}
+            />
+            <DropdownField
+              label={t('adminJeunesse.children.subRegion')}
+              value={filters.subRegion}
+              onPress={() => openPicker('subRegion')}
+            />
 
             <View style={styles.twoBtns}>
               <TouchableOpacity
                 style={[styles.grayBtn, { flex: 1 }]}
-                onPress={() => setFilters({ country: "", province: "", city: "", region: "", subRegion: "" })}
+                onPress={() =>
+                  setFilters({
+                    country: '',
+                    province: '',
+                    city: '',
+                    region: '',
+                    subRegion: '',
+                  })
+                }
               >
-                <Text style={styles.grayBtnText}>{t("common.reset")}</Text>
+                <Text style={styles.grayBtnText}>{t('common.reset')}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={() => setFiltersOpen(false)}>
-                <Text style={styles.primaryText}>{t("common.apply")}</Text>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { flex: 1 }]}
+                onPress={() => setFiltersOpen(false)}
+              >
+                <Text style={styles.primaryText}>{t('common.apply')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1154,7 +1421,12 @@ export default function AdminJeunesse({ navigation }: any) {
       </Modal>
 
       {/* ================= FILTER VALUE PICKER MODAL ================= */}
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
         <View style={styles.overlayCenter}>
           <Pressable style={{ flex: 1 }} onPress={() => setPickerOpen(false)} />
           <View style={styles.pickerBox}>
@@ -1163,7 +1435,10 @@ export default function AdminJeunesse({ navigation }: any) {
                 <Text style={styles.modalTitle}>{pickerTitle}</Text>
                 <Text style={styles.modalSub}>Choose one value</Text>
               </View>
-              <TouchableOpacity onPress={() => setPickerOpen(false)} style={styles.modalCloseBtn}>
+              <TouchableOpacity
+                onPress={() => setPickerOpen(false)}
+                style={styles.modalCloseBtn}
+              >
                 <Icon name="close" size={18} color="#111" />
               </TouchableOpacity>
             </View>
@@ -1179,15 +1454,33 @@ export default function AdminJeunesse({ navigation }: any) {
               />
             </View>
 
-            <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
-              <TouchableOpacity style={styles.pickItem} onPress={() => applyPickedValue("")} activeOpacity={0.9}>
-                <Text style={[styles.pickText, { fontWeight: "900" }]}>— Clear —</Text>
+            <ScrollView
+              style={{ maxHeight: 320 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <TouchableOpacity
+                style={styles.pickItem}
+                onPress={() => applyPickedValue('')}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.pickText, { fontWeight: '900' }]}>
+                  — Clear —
+                </Text>
               </TouchableOpacity>
 
               {pickerOptions
-                .filter((o) => !pickerSearch.trim() || o.toLowerCase().includes(pickerSearch.trim().toLowerCase()))
-                .map((opt) => (
-                  <TouchableOpacity key={opt} style={styles.pickItem} onPress={() => applyPickedValue(opt)} activeOpacity={0.9}>
+                .filter(
+                  o =>
+                    !pickerSearch.trim() ||
+                    o.toLowerCase().includes(pickerSearch.trim().toLowerCase()),
+                )
+                .map(opt => (
+                  <TouchableOpacity
+                    key={opt}
+                    style={styles.pickItem}
+                    onPress={() => applyPickedValue(opt)}
+                    activeOpacity={0.9}
+                  >
                     <Text style={styles.pickText}>{opt}</Text>
                   </TouchableOpacity>
                 ))}
@@ -1197,61 +1490,174 @@ export default function AdminJeunesse({ navigation }: any) {
       </Modal>
 
       {/* ================= CHILD ADD/EDIT MODAL ================= */}
-      <Modal visible={childModalOpen} transparent animationType="slide" onRequestClose={() => setChildModalOpen(false)}>
+      <Modal
+        visible={childModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setChildModalOpen(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setChildModalOpen(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setChildModalOpen(false))}
+          />
           <View style={styles.modal}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>
-                    {editingChild ? t("common.edit") : t("common.create")} · {t("adminJeunesse.children.addChild")}
+                    {editingChild ? t('common.edit') : t('common.create')} ·{' '}
+                    {t('adminJeunesse.children.addChild')}
                   </Text>
-                  <Text style={styles.modalSub}>{t("adminJeunesse.children.identifierHelp")}</Text>
+                  <Text style={styles.modalSub}>
+                    {t('adminJeunesse.children.identifierHelp')}
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={() => setChildModalOpen(false)} style={styles.modalCloseBtn}>
+                <TouchableOpacity
+                  onPress={() => setChildModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                >
                   <Icon name="close" size={18} color="#111" />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.badgeLine}>
-                <View style={[styles.badgePill, { backgroundColor: "rgba(47,165,169,0.12)" }]}>
-                  <Text style={[styles.badgeText, { color: "#0F766E" }]}>
-                    {t("adminJeunesse.children.id")}: {childDraft.identifier || "—"}
+                <View
+                  style={[
+                    styles.badgePill,
+                    { backgroundColor: 'rgba(47,165,169,0.12)' },
+                  ]}
+                >
+                  <Text style={[styles.badgeText, { color: '#0F766E' }]}>
+                    {t('adminJeunesse.children.id')}:{' '}
+                    {childDraft.identifier || '—'}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setChildDraft((s) => ({ ...s, identifier: genIdentifier() }))} style={styles.smallBtn}>
+                <TouchableOpacity
+                  onPress={() =>
+                    setChildDraft(s => ({ ...s, identifier: genIdentifier() }))
+                  }
+                  style={styles.smallBtn}
+                >
                   <Icon name="refresh" size={16} color="#111" />
-                  <Text style={styles.smallBtnText}>{t("adminJeunesse.children.generateId")}</Text>
+                  <Text style={styles.smallBtnText}>
+                    {t('adminJeunesse.children.generateId')}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              <Field label={t("adminJeunesse.children.firstName")} value={childDraft.firstName} onChangeText={(v) => setChildDraft((s) => ({ ...s, firstName: v }))} />
-              <Field label={t("adminJeunesse.children.lastName")} value={childDraft.lastName} onChangeText={(v) => setChildDraft((s) => ({ ...s, lastName: v }))} />
-              <Field label={t("adminJeunesse.children.age")} value={childDraft.age} onChangeText={(v) => setChildDraft((s) => ({ ...s, age: v }))} placeholder="e.g. 10" keyboardType="numeric" />
-              <Field label={t("adminJeunesse.children.class")} value={childDraft.currentClass} onChangeText={(v) => setChildDraft((s) => ({ ...s, currentClass: v }))} />
-              <Field label={t("adminJeunesse.children.academicYear")} value={childDraft.academicYear} onChangeText={(v) => setChildDraft((s) => ({ ...s, academicYear: v }))} placeholder="2024-2025" />
+              <Field
+                label={t('adminJeunesse.children.firstName')}
+                value={childDraft.firstName}
+                onChangeText={v => setChildDraft(s => ({ ...s, firstName: v }))}
+              />
+              <Field
+                label={t('adminJeunesse.children.lastName')}
+                value={childDraft.lastName}
+                onChangeText={v => setChildDraft(s => ({ ...s, lastName: v }))}
+              />
+              <Field
+                label={t('adminJeunesse.children.age')}
+                value={childDraft.age}
+                onChangeText={v => setChildDraft(s => ({ ...s, age: v }))}
+                placeholder="e.g. 10"
+                keyboardType="numeric"
+              />
+              <Field
+                label={t('adminJeunesse.children.class')}
+                value={childDraft.currentClass}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, currentClass: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.children.academicYear')}
+                value={childDraft.academicYear}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, academicYear: v }))
+                }
+                placeholder="2024-2025"
+              />
 
               <View style={styles.divider} />
 
-              <Field label={t("adminJeunesse.children.parish")} value={childDraft.parishName} onChangeText={(v) => setChildDraft((s) => ({ ...s, parishName: v }))} />
-              <Field label={t("adminJeunesse.children.shepherd")} value={childDraft.parishShepherdNames} onChangeText={(v) => setChildDraft((s) => ({ ...s, parishShepherdNames: v }))} />
-              <Field label={t("adminJeunesse.children.teacher")} value={childDraft.mainTeacherNames} onChangeText={(v) => setChildDraft((s) => ({ ...s, mainTeacherNames: v }))} />
-              <Field label={`${t("adminJeunesse.children.phones")} (shepherd)`} value={childDraft.shepherdPhone} onChangeText={(v) => setChildDraft((s) => ({ ...s, shepherdPhone: v }))} />
-              <Field label={`${t("adminJeunesse.children.phones")} (teacher)`} value={childDraft.teacherPhone} onChangeText={(v) => setChildDraft((s) => ({ ...s, teacherPhone: v }))} />
-              <Field label={t("adminJeunesse.children.email")} value={childDraft.contactEmail} onChangeText={(v) => setChildDraft((s) => ({ ...s, contactEmail: v }))} />
+              <Field
+                label={t('adminJeunesse.children.parish')}
+                value={childDraft.parishName}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, parishName: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.children.shepherd')}
+                value={childDraft.parishShepherdNames}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, parishShepherdNames: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.children.teacher')}
+                value={childDraft.mainTeacherNames}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, mainTeacherNames: v }))
+                }
+              />
+              <Field
+                label={`${t('adminJeunesse.children.phones')} (shepherd)`}
+                value={childDraft.shepherdPhone}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, shepherdPhone: v }))
+                }
+              />
+              <Field
+                label={`${t('adminJeunesse.children.phones')} (teacher)`}
+                value={childDraft.teacherPhone}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, teacherPhone: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.children.email')}
+                value={childDraft.contactEmail}
+                onChangeText={v =>
+                  setChildDraft(s => ({ ...s, contactEmail: v }))
+                }
+              />
 
               <View style={styles.divider} />
 
-              <Field label={t("adminJeunesse.children.country")} value={childDraft.country} onChangeText={(v) => setChildDraft((s) => ({ ...s, country: v }))} />
-              <Field label={t("adminJeunesse.children.province")} value={childDraft.province} onChangeText={(v) => setChildDraft((s) => ({ ...s, province: v }))} />
-              <Field label={t("adminJeunesse.children.city")} value={childDraft.city} onChangeText={(v) => setChildDraft((s) => ({ ...s, city: v }))} />
-              <Field label={t("adminJeunesse.children.region")} value={childDraft.region} onChangeText={(v) => setChildDraft((s) => ({ ...s, region: v }))} />
-              <Field label={t("adminJeunesse.children.subRegion")} value={childDraft.subRegion} onChangeText={(v) => setChildDraft((s) => ({ ...s, subRegion: v }))} />
+              <Field
+                label={t('adminJeunesse.children.country')}
+                value={childDraft.country}
+                onChangeText={v => setChildDraft(s => ({ ...s, country: v }))}
+              />
+              <Field
+                label={t('adminJeunesse.children.province')}
+                value={childDraft.province}
+                onChangeText={v => setChildDraft(s => ({ ...s, province: v }))}
+              />
+              <Field
+                label={t('adminJeunesse.children.city')}
+                value={childDraft.city}
+                onChangeText={v => setChildDraft(s => ({ ...s, city: v }))}
+              />
+              <Field
+                label={t('adminJeunesse.children.region')}
+                value={childDraft.region}
+                onChangeText={v => setChildDraft(s => ({ ...s, region: v }))}
+              />
+              <Field
+                label={t('adminJeunesse.children.subRegion')}
+                value={childDraft.subRegion}
+                onChangeText={v => setChildDraft(s => ({ ...s, subRegion: v }))}
+              />
 
               <TouchableOpacity style={styles.primaryBtn} onPress={saveChild}>
                 <Icon name="save-outline" size={16} color="#fff" />
-                <Text style={styles.primaryText}>{t("common.save")}</Text>
+                <Text style={styles.primaryText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1259,42 +1665,109 @@ export default function AdminJeunesse({ navigation }: any) {
       </Modal>
 
       {/* ================= CONCOURS PERIOD MODAL ================= */}
-      <Modal visible={concoursOpen} transparent animationType="slide" onRequestClose={() => setConcoursOpen(false)}>
+      <Modal
+        visible={concoursOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setConcoursOpen(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setConcoursOpen(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setConcoursOpen(false))}
+          />
           <View style={styles.modal}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>Set Periods</Text>
-                  <Text style={styles.modalSub}>{t("adminJeunesse.concours.periodsHelp")}</Text>
+                  <Text style={styles.modalSub}>
+                    {t('adminJeunesse.concours.periodsHelp')}
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={() => setConcoursOpen(false)} style={styles.modalCloseBtn}>
+                <TouchableOpacity
+                  onPress={() => setConcoursOpen(false)}
+                  style={styles.modalCloseBtn}
+                >
                   <Icon name="close" size={18} color="#111" />
                 </TouchableOpacity>
               </View>
 
-              <Field label={t("adminJeunesse.concours.year")} value={periodDraft.year} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, year: v }))} placeholder="2026" />
+              <Field
+                label={t('adminJeunesse.concours.year')}
+                value={periodDraft.year}
+                onChangeText={v => setPeriodDraft(s => ({ ...s, year: v }))}
+                placeholder="2026"
+              />
 
               <Text style={styles.sectionTitle}>Preliminary</Text>
-              <Field label={t("adminJeunesse.concours.start")} value={periodDraft.prelimStart} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, prelimStart: v }))} />
-              <Field label={t("adminJeunesse.concours.end")} value={periodDraft.prelimEnd} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, prelimEnd: v }))} />
+              <Field
+                label={t('adminJeunesse.concours.start')}
+                value={periodDraft.prelimStart}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, prelimStart: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.concours.end')}
+                value={periodDraft.prelimEnd}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, prelimEnd: v }))
+                }
+              />
 
               <Text style={styles.sectionTitle}>Preselection</Text>
-              <Field label={t("adminJeunesse.concours.start")} value={periodDraft.preselectionStart} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, preselectionStart: v }))} />
-              <Field label={t("adminJeunesse.concours.end")} value={periodDraft.preselectionEnd} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, preselectionEnd: v }))} />
+              <Field
+                label={t('adminJeunesse.concours.start')}
+                value={periodDraft.preselectionStart}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, preselectionStart: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.concours.end')}
+                value={periodDraft.preselectionEnd}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, preselectionEnd: v }))
+                }
+              />
 
               <Text style={styles.sectionTitle}>Selection</Text>
-              <Field label={t("adminJeunesse.concours.start")} value={periodDraft.selectionStart} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, selectionStart: v }))} />
-              <Field label={t("adminJeunesse.concours.end")} value={periodDraft.selectionEnd} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, selectionEnd: v }))} />
+              <Field
+                label={t('adminJeunesse.concours.start')}
+                value={periodDraft.selectionStart}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, selectionStart: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.concours.end')}
+                value={periodDraft.selectionEnd}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, selectionEnd: v }))
+                }
+              />
 
               <Text style={styles.sectionTitle}>Final</Text>
-              <Field label={t("adminJeunesse.concours.start")} value={periodDraft.finalStart} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, finalStart: v }))} />
-              <Field label={t("adminJeunesse.concours.end")} value={periodDraft.finalEnd} onChangeText={(v) => setPeriodDraft((s) => ({ ...s, finalEnd: v }))} />
+              <Field
+                label={t('adminJeunesse.concours.start')}
+                value={periodDraft.finalStart}
+                onChangeText={v =>
+                  setPeriodDraft(s => ({ ...s, finalStart: v }))
+                }
+              />
+              <Field
+                label={t('adminJeunesse.concours.end')}
+                value={periodDraft.finalEnd}
+                onChangeText={v => setPeriodDraft(s => ({ ...s, finalEnd: v }))}
+              />
 
               <TouchableOpacity style={styles.primaryBtn} onPress={savePeriods}>
                 <Icon name="save-outline" size={16} color="#fff" />
-                <Text style={styles.primaryText}>{t("common.save")}</Text>
+                <Text style={styles.primaryText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1302,16 +1775,32 @@ export default function AdminJeunesse({ navigation }: any) {
       </Modal>
 
       {/* ================= CANDIDATES MODAL ================= */}
-      <Modal visible={candidatesOpen} transparent animationType="slide" onRequestClose={() => setCandidatesOpen(false)}>
+      <Modal
+        visible={candidatesOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCandidatesOpen(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setCandidatesOpen(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setCandidatesOpen(false))}
+          />
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Candidates · {PHASE_LABEL[candidatePhase]}</Text>
-                <Text style={styles.modalSub}>Search and tap a child to add. Selected are saved for this concours.</Text>
+                <Text style={styles.modalTitle}>
+                  Candidates · {PHASE_LABEL[candidatePhase]}
+                </Text>
+                <Text style={styles.modalSub}>
+                  Search and tap a child to add. Selected are saved for this
+                  concours.
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => setCandidatesOpen(false)} style={styles.modalCloseBtn}>
+              <TouchableOpacity
+                onPress={() => setCandidatesOpen(false)}
+                style={styles.modalCloseBtn}
+              >
                 <Icon name="close" size={18} color="#111" />
               </TouchableOpacity>
             </View>
@@ -1327,28 +1816,42 @@ export default function AdminJeunesse({ navigation }: any) {
               />
             </View>
 
-            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Selected ({selectedCandidateIds.length})</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
+              Selected ({selectedCandidateIds.length})
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10 }}
+            >
               {selectedCandidateObjects.length ? (
                 selectedCandidateObjects.map((c: any) => (
                   <View key={c.id} style={styles.selChip}>
                     <Text style={styles.selChipText} numberOfLines={1}>
                       {norm(c.firstName)} {norm(c.lastName)}
                     </Text>
-                    <TouchableOpacity onPress={() => removeCandidate(c.id)} style={styles.selChipX}>
+                    <TouchableOpacity
+                      onPress={() => removeCandidate(c.id)}
+                      style={styles.selChipX}
+                    >
                       <Icon name="close" size={14} color="#111" />
                     </TouchableOpacity>
                   </View>
                 ))
               ) : (
-                <Text style={styles.helperText}>No candidate selected yet.</Text>
+                <Text style={styles.helperText}>
+                  No candidate selected yet.
+                </Text>
               )}
             </ScrollView>
 
             <View style={styles.divider} />
 
             <Text style={styles.sectionTitle}>Children list</Text>
-            <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={{ maxHeight: 360 }}
+              keyboardShouldPersistTaps="handled"
+            >
               {candidatePool.map((c: any) => {
                 const on = selectedCandidateSet.has(c.id);
                 return (
@@ -1360,9 +1863,9 @@ export default function AdminJeunesse({ navigation }: any) {
                   >
                     <View style={styles.pickLeft}>
                       <Icon
-                        name={on ? "checkmark-circle" : "ellipse-outline"}
+                        name={on ? 'checkmark-circle' : 'ellipse-outline'}
                         size={20}
-                        color={on ? COLORS.light.primary : "#9CA3AF"}
+                        color={on ? COLORS.light.primary : '#9CA3AF'}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -1370,38 +1873,56 @@ export default function AdminJeunesse({ navigation }: any) {
                         {norm(c.firstName)} {norm(c.lastName)}
                       </Text>
                       <Text style={styles.pickSub} numberOfLines={1}>
-                        ID: {norm(c.identifier) || "—"} · {norm(c.country) || "—"} / {norm(c.city) || "—"}
+                        ID: {norm(c.identifier) || '—'} ·{' '}
+                        {norm(c.country) || '—'} / {norm(c.city) || '—'}
                       </Text>
                     </View>
                     <View style={styles.pickRight}>
-                      <Text style={styles.pickTag}>{on ? "ADDED" : "ADD"}</Text>
+                      <Text style={styles.pickTag}>{on ? 'ADDED' : 'ADD'}</Text>
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={saveCandidates}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={saveCandidates}
+            >
               <Icon name="save-outline" size={16} color="#fff" />
-              <Text style={styles.primaryText}>{t("common.save")}</Text>
+              <Text style={styles.primaryText}>{t('common.save')}</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
       {/* ================= PASSED MODAL ================= */}
-      <Modal visible={passedOpen} transparent animationType="slide" onRequestClose={() => setPassedOpen(false)}>
+      <Modal
+        visible={passedOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPassedOpen(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setPassedOpen(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setPassedOpen(false))}
+          />
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Passed → Next · {PHASE_LABEL[passedPhase]}</Text>
+                <Text style={styles.modalTitle}>
+                  Passed → Next · {PHASE_LABEL[passedPhase]}
+                </Text>
                 <Text style={styles.modalSub}>
-                  Check passed candidates and set their average. Saved results can be searched by identifier on your Jeunesse page.
+                  Check passed candidates and set their average. Saved results
+                  can be searched by identifier on your Jeunesse page.
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setPassedOpen(false)} style={styles.modalCloseBtn}>
+              <TouchableOpacity
+                onPress={() => setPassedOpen(false)}
+                style={styles.modalCloseBtn}
+              >
                 <Icon name="close" size={18} color="#111" />
               </TouchableOpacity>
             </View>
@@ -1417,18 +1938,25 @@ export default function AdminJeunesse({ navigation }: any) {
               />
             </View>
 
-            <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={{ maxHeight: 420 }}
+              keyboardShouldPersistTaps="handled"
+            >
               {passedList.length ? (
                 passedList.map((c: any) => {
                   const id = c.id;
-                  const row = passedMap[id] || { passed: false, average: "" };
+                  const row = passedMap[id] || { passed: false, average: '' };
                   return (
                     <View key={id} style={styles.passRow}>
-                      <TouchableOpacity onPress={() => togglePassed(id)} style={styles.passCheck} activeOpacity={0.9}>
+                      <TouchableOpacity
+                        onPress={() => togglePassed(id)}
+                        style={styles.passCheck}
+                        activeOpacity={0.9}
+                      >
                         <Icon
-                          name={row.passed ? "checkbox" : "square-outline"}
+                          name={row.passed ? 'checkbox' : 'square-outline'}
                           size={22}
-                          color={row.passed ? COLORS.light.primary : "#9CA3AF"}
+                          color={row.passed ? COLORS.light.primary : '#9CA3AF'}
                         />
                       </TouchableOpacity>
 
@@ -1437,7 +1965,8 @@ export default function AdminJeunesse({ navigation }: any) {
                           {norm(c.firstName)} {norm(c.lastName)}
                         </Text>
                         <Text style={styles.pickSub} numberOfLines={1}>
-                          ID: {norm(c.identifier) || "—"} · {norm(c.country) || "—"} / {norm(c.city) || "—"}
+                          ID: {norm(c.identifier) || '—'} ·{' '}
+                          {norm(c.country) || '—'} / {norm(c.city) || '—'}
                         </Text>
                       </View>
 
@@ -1445,10 +1974,12 @@ export default function AdminJeunesse({ navigation }: any) {
                         <Text style={styles.avgLabel}>Avg</Text>
                         <TextInput
                           value={row.average}
-                          onChangeText={(v) => setAverage(id, v)}
+                          onChangeText={v => setAverage(id, v)}
                           placeholder="0"
                           placeholderTextColor="#9CA3AF"
-                          keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
+                          keyboardType={
+                            Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'
+                          }
                           style={styles.avgInput}
                         />
                       </View>
@@ -1457,31 +1988,56 @@ export default function AdminJeunesse({ navigation }: any) {
                 })
               ) : (
                 <View style={{ paddingVertical: 16 }}>
-                  <Text style={styles.helperText}>No candidates in this phase yet. Add candidates first.</Text>
+                  <Text style={styles.helperText}>
+                    No candidates in this phase yet. Add candidates first.
+                  </Text>
                 </View>
               )}
             </ScrollView>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={savePassedAndMoveNext}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={savePassedAndMoveNext}
+            >
               <Icon name="checkmark-done-outline" size={16} color="#fff" />
-              <Text style={styles.primaryText}>Save & Move to Next Concours</Text>
+              <Text style={styles.primaryText}>
+                Save & Move to Next Concours
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
       {/* ================= QUIZ MODAL (MULTI QUESTIONS) ================= */}
-      <Modal visible={quizOpen} transparent animationType="slide" onRequestClose={() => setQuizOpen(false)}>
+      <Modal
+        visible={quizOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setQuizOpen(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setQuizOpen(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setQuizOpen(false))}
+          />
           <View style={styles.modal}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>{t("adminJeunesse.quiz.manage")}</Text>
-                  <Text style={styles.modalSub}>Create / update multi-question quiz</Text>
+                  <Text style={styles.modalTitle}>
+                    {t('adminJeunesse.quiz.manage')}
+                  </Text>
+                  <Text style={styles.modalSub}>
+                    Create / update multi-question quiz
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={() => setQuizOpen(false)} style={styles.modalCloseBtn}>
+                <TouchableOpacity
+                  onPress={() => setQuizOpen(false)}
+                  style={styles.modalCloseBtn}
+                >
                   <Icon name="close" size={18} color="#111" />
                 </TouchableOpacity>
               </View>
@@ -1489,33 +2045,60 @@ export default function AdminJeunesse({ navigation }: any) {
               <Field
                 label="Quiz Title"
                 value={quizDraft.title}
-                onChangeText={(v) => setQuizDraft((s) => ({ ...s, title: v }))}
+                onChangeText={v => setQuizDraft(s => ({ ...s, title: v }))}
               />
 
               <FieldInline
                 label="Duration (seconds)"
                 value={quizDraft.durationSec}
-                onChangeText={(v: any) => setQuizDraft((s) => ({ ...s, durationSec: v }))}
+                onChangeText={(v: any) =>
+                  setQuizDraft(s => ({ ...s, durationSec: v }))
+                }
                 placeholder="60"
                 keyboardType="numeric"
               />
 
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 12,
+                }}
+              >
                 <Text style={styles.label}>Set as Active Quiz</Text>
                 <TouchableOpacity
-                  onPress={() => setQuizDraft((s) => ({ ...s, isActive: !s.isActive }))}
+                  onPress={() =>
+                    setQuizDraft(s => ({ ...s, isActive: !s.isActive }))
+                  }
                   activeOpacity={0.9}
                   style={[
                     styles.smallBtn,
-                    { backgroundColor: quizDraft.isActive ? "rgba(47,165,169,0.12)" : "#F3F4F6" },
+                    {
+                      backgroundColor: quizDraft.isActive
+                        ? 'rgba(47,165,169,0.12)'
+                        : '#F3F4F6',
+                    },
                   ]}
                 >
-                  <Icon name={quizDraft.isActive ? "checkmark-circle" : "ellipse-outline"} size={16} color="#111" />
-                  <Text style={styles.smallBtnText}>{quizDraft.isActive ? "YES" : "NO"}</Text>
+                  <Icon
+                    name={
+                      quizDraft.isActive
+                        ? 'checkmark-circle'
+                        : 'ellipse-outline'
+                    }
+                    size={16}
+                    color="#111"
+                  />
+                  <Text style={styles.smallBtnText}>
+                    {quizDraft.isActive ? 'YES' : 'NO'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.sectionTitle}>Questions ({quizDraft.questions.length})</Text>
+              <Text style={styles.sectionTitle}>
+                Questions ({quizDraft.questions.length})
+              </Text>
 
               {quizDraft.questions.length ? (
                 <View style={{ gap: 10 }}>
@@ -1526,32 +2109,45 @@ export default function AdminJeunesse({ navigation }: any) {
                           {index + 1}. {q.text}
                         </Text>
                         <Text style={styles.pickSub} numberOfLines={2}>
-                          Correct: {q.options?.[q.answerIndex] || "—"}
+                          Correct: {q.options?.[q.answerIndex] || '—'}
                         </Text>
                       </View>
 
-                      <TouchableOpacity onPress={() => openEditQuestion(q, index)} style={styles.iconMiniBtn} activeOpacity={0.9}>
+                      <TouchableOpacity
+                        onPress={() => openEditQuestion(q, index)}
+                        style={styles.iconMiniBtn}
+                        activeOpacity={0.9}
+                      >
                         <Icon name="create-outline" size={18} color="#111" />
                       </TouchableOpacity>
 
-                      <TouchableOpacity onPress={() => deleteQuestion(index)} style={styles.iconMiniBtn} activeOpacity={0.9}>
+                      <TouchableOpacity
+                        onPress={() => deleteQuestion(index)}
+                        style={styles.iconMiniBtn}
+                        activeOpacity={0.9}
+                      >
                         <Icon name="trash-outline" size={18} color="#111" />
                       </TouchableOpacity>
                     </View>
                   ))}
                 </View>
               ) : (
-                <Text style={styles.helperText}>No questions yet. Tap “Add Question”.</Text>
+                <Text style={styles.helperText}>
+                  No questions yet. Tap “Add Question”.
+                </Text>
               )}
 
-              <TouchableOpacity style={styles.primaryBtn} onPress={openAddQuestion}>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={openAddQuestion}
+              >
                 <Icon name="add" size={16} color="#fff" />
                 <Text style={styles.primaryText}>Add Question</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.primaryBtn} onPress={saveQuiz}>
                 <Icon name="save-outline" size={16} color="#fff" />
-                <Text style={styles.primaryText}>{t("common.save")}</Text>
+                <Text style={styles.primaryText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1559,17 +2155,37 @@ export default function AdminJeunesse({ navigation }: any) {
       </Modal>
 
       {/* ================= QUESTION MODAL ================= */}
-      <Modal visible={questionModal} transparent animationType="slide" onRequestClose={() => setQuestionModal(false)}>
+      <Modal
+        visible={questionModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setQuestionModal(false)}
+      >
         <View style={styles.overlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => (Keyboard.dismiss(), setQuestionModal(false))} />
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => (Keyboard.dismiss(), setQuestionModal(false))}
+          />
           <View style={styles.modal}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>{editingQuestionIndex === null ? "Add Question" : "Edit Question"}</Text>
-                  <Text style={styles.modalSub}>4 options, choose correct answer index (0-3)</Text>
+                  <Text style={styles.modalTitle}>
+                    {editingQuestionIndex === null
+                      ? 'Add Question'
+                      : 'Edit Question'}
+                  </Text>
+                  <Text style={styles.modalSub}>
+                    4 options, choose correct answer index (0-3)
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={() => setQuestionModal(false)} style={styles.modalCloseBtn}>
+                <TouchableOpacity
+                  onPress={() => setQuestionModal(false)}
+                  style={styles.modalCloseBtn}
+                >
                   <Icon name="close" size={18} color="#111" />
                 </TouchableOpacity>
               </View>
@@ -1577,19 +2193,21 @@ export default function AdminJeunesse({ navigation }: any) {
               <Field
                 label="Question"
                 value={questionDraft.text}
-                onChangeText={(v) => setQuestionDraft((s) => ({ ...s, text: v }))}
+                onChangeText={v => setQuestionDraft(s => ({ ...s, text: v }))}
               />
 
               <Text style={styles.sectionTitle}>Options</Text>
-              {(questionDraft.options || ["", "", "", ""]).map((op, idx) => (
+              {(questionDraft.options || ['', '', '', '']).map((op, idx) => (
                 <Field
                   key={idx}
                   label={`Option ${idx + 1}`}
                   value={op}
-                  onChangeText={(v) => {
-                    const arr = [...(questionDraft.options || ["", "", "", ""])];
+                  onChangeText={v => {
+                    const arr = [
+                      ...(questionDraft.options || ['', '', '', '']),
+                    ];
                     arr[idx] = v;
-                    setQuestionDraft((s) => ({ ...s, options: arr }));
+                    setQuestionDraft(s => ({ ...s, options: arr }));
                   }}
                 />
               ))}
@@ -1598,14 +2216,20 @@ export default function AdminJeunesse({ navigation }: any) {
                 label="Correct answer index (0-3)"
                 value={String(questionDraft.answerIndex)}
                 onChangeText={(v: any) => {
-                  const n = Number(String(v || "0").replace(/[^\d]/g, "")) || 0;
-                  setQuestionDraft((s) => ({ ...s, answerIndex: Math.max(0, Math.min(3, n)) }));
+                  const n = Number(String(v || '0').replace(/[^\d]/g, '')) || 0;
+                  setQuestionDraft(s => ({
+                    ...s,
+                    answerIndex: Math.max(0, Math.min(3, n)),
+                  }));
                 }}
                 placeholder="0"
                 keyboardType="numeric"
               />
 
-              <TouchableOpacity style={styles.primaryBtn} onPress={saveQuestion}>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={saveQuestion}
+              >
                 <Icon name="save-outline" size={16} color="#fff" />
                 <Text style={styles.primaryText}>Save Question</Text>
               </TouchableOpacity>
@@ -1618,10 +2242,24 @@ export default function AdminJeunesse({ navigation }: any) {
 }
 
 /* ================= UI PARTS ================= */
-function Pill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function Pill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={[styles.pill, active && styles.pillActive]}>
-      <Text style={[styles.pillText, active && styles.pillTextActive]}>{label}</Text>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.9}
+      style={[styles.pill, active && styles.pillActive]}
+    >
+      <Text style={[styles.pillText, active && styles.pillTextActive]}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -1658,18 +2296,34 @@ function FieldInline(props: any) {
   return (
     <View style={{ flex: 1, marginBottom: 12 }}>
       <Text style={styles.label}>{props.label}</Text>
-      <TextInput {...props} placeholderTextColor="#9CA3AF" style={styles.input} />
+      <TextInput
+        {...props}
+        placeholderTextColor="#9CA3AF"
+        style={styles.input}
+      />
     </View>
   );
 }
 
-function DropdownField({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
+function DropdownField({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+}) {
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.dropdown}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.9}
+        style={styles.dropdown}
+      >
         <Text style={styles.dropdownText} numberOfLines={1}>
-          {value ? value : "— Select —"}
+          {value ? value : '— Select —'}
         </Text>
         <Icon name="chevron-down" size={18} color="#111" />
       </TouchableOpacity>
@@ -1679,83 +2333,92 @@ function DropdownField({ label, value, onPress }: { label: string; value: string
 
 /* ================= STYLES ================= */
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F4F5F7" },
+  screen: { flex: 1, backgroundColor: '#F4F5F7' },
 
   hero: {
-    backgroundColor: "#0E0E10",
+    backgroundColor: '#0E0E10',
     borderBottomLeftRadius: 22,
     borderBottomRightRadius: 22,
     paddingTop: 12,
     paddingHorizontal: 14,
     paddingBottom: 14,
   },
-  heroTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "900" },
-  heroSub: { marginTop: 4, color: "rgba(255,255,255,0.7)", fontWeight: "700", fontSize: 12.5 },
+  heroTitle: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  heroSub: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    fontSize: 12.5,
+  },
 
   heroAction: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   searchRow: {
     marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  searchInput: { flex: 1, color: "#fff", fontWeight: "800" },
+  searchInput: { flex: 1, color: '#fff', fontWeight: '800' },
   filterBtn: {
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  pills: { marginTop: 12, flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  pills: { marginTop: 12, flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   pill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  pillActive: { backgroundColor: "#fff" },
-  pillText: { color: "rgba(255,255,255,0.78)", fontWeight: "900", fontSize: 12 },
-  pillTextActive: { color: "#111" },
+  pillActive: { backgroundColor: '#fff' },
+  pillText: {
+    color: 'rgba(255,255,255,0.78)',
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  pillTextActive: { color: '#111' },
 
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 14,
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 18,
     elevation: 3,
-    alignItems: "center",
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: "#EEF0F3",
+    borderColor: '#EEF0F3',
     marginBottom: 12,
   },
   cardLeft: { width: 54, height: 54 },
@@ -1763,266 +2426,309 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 18,
-    backgroundColor: "rgba(47,165,169,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(47,165,169,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  name: { fontSize: 15.5, fontWeight: "900", color: "#111", flex: 1 },
-  email: { marginTop: 6, fontSize: 12.5, color: "#6B6B70", fontWeight: "700" },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  name: { fontSize: 15.5, fontWeight: '900', color: '#111', flex: 1 },
+  email: { marginTop: 6, fontSize: 12.5, color: '#6B6B70', fontWeight: '700' },
   metaRow: { marginTop: 6 },
-  metaText: { fontSize: 12, fontWeight: "800", color: "#6B6B70" },
+  metaText: { fontSize: 12, fontWeight: '800', color: '#6B6B70' },
 
   badgePill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  badgeText: { fontSize: 10.5, fontWeight: "900" },
+  badgeText: { fontSize: 10.5, fontWeight: '900' },
 
   trashBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  empty: { padding: 22, alignItems: "center" },
-  emptyMini: { padding: 18, alignItems: "center" },
-  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: "900", color: "#111" },
-  emptySub: { marginTop: 6, fontSize: 12.5, color: "#6B6B70", fontWeight: "700", textAlign: "center" },
+  empty: { padding: 22, alignItems: 'center' },
+  emptyMini: { padding: 18, alignItems: 'center' },
+  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: '900', color: '#111' },
+  emptySub: {
+    marginTop: 6,
+    fontSize: 12.5,
+    color: '#6B6B70',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.42)", justifyContent: "flex-end" },
-  overlayCenter: { flex: 1, backgroundColor: "rgba(0,0,0,0.42)", justifyContent: "center" },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    justifyContent: 'flex-end',
+  },
+  overlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    justifyContent: 'center',
+  },
 
   modal: {
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 18,
-    maxHeight: "92%",
+    maxHeight: '92%',
   },
 
   pickerBox: {
     marginHorizontal: 14,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 16,
-    maxHeight: "80%",
+    maxHeight: '80%',
   },
 
-  modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
-  modalTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
-  modalSub: { marginTop: 4, fontSize: 12.5, fontWeight: "700", color: "#6B6B70" },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '900', color: '#111' },
+  modalSub: {
+    marginTop: 4,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#6B6B70',
+  },
   modalCloseBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  divider: { height: 1, backgroundColor: "#EEF0F3", marginVertical: 14 },
+  divider: { height: 1, backgroundColor: '#EEF0F3', marginVertical: 14 },
 
   sectionCard: {
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 20,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#EEF0F3",
-    shadowColor: "#000",
+    borderColor: '#EEF0F3',
+    shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 16,
     elevation: 2,
   },
-  sectionTitle: { fontSize: 14.5, fontWeight: "900", color: "#111", marginBottom: 10 },
-  helperText: { fontSize: 12.5, color: "#6B6B70", fontWeight: "700" },
+  sectionTitle: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#111',
+    marginBottom: 10,
+  },
+  helperText: { fontSize: 12.5, color: '#6B6B70', fontWeight: '700' },
 
   roomRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#EEF0F3",
+    borderColor: '#EEF0F3',
     marginBottom: 10,
   },
   roomIcon: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  roomName: { fontSize: 13.5, fontWeight: "900", color: "#111" },
-  roomSub: { marginTop: 4, fontSize: 12, fontWeight: "800", color: "#6B6B70" },
+  roomName: { fontSize: 13.5, fontWeight: '900', color: '#111' },
+  roomSub: { marginTop: 4, fontSize: 12, fontWeight: '800', color: '#6B6B70' },
   smallIconBtn: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   concoursBox: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: "#EEF0F3",
+    borderColor: '#EEF0F3',
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
   },
 
-  label: { fontSize: 12, fontWeight: "900", color: "#111", marginBottom: 8 },
+  label: { fontSize: 12, fontWeight: '900', color: '#111', marginBottom: 8 },
 
   input: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     padding: 14,
     fontSize: 14,
-    fontWeight: "800",
-    color: "#111",
+    fontWeight: '800',
+    color: '#111',
   },
 
-  twoBtns: { flexDirection: "row", gap: 10 },
+  twoBtns: { flexDirection: 'row', gap: 10 },
 
   primaryBtn: {
     backgroundColor: COLORS.light.primary,
     paddingVertical: 14,
     borderRadius: 16,
-    alignItems: "center",
+    alignItems: 'center',
     marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "center",
+    flexDirection: 'row',
+    justifyContent: 'center',
     gap: 8,
   },
-  primaryText: { color: "#fff", fontWeight: "900" },
+  primaryText: { color: '#fff', fontWeight: '900' },
 
   grayBtn: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  grayBtnText: { fontWeight: "900", color: "#111" },
+  grayBtnText: { fontWeight: '900', color: '#111' },
 
-  badgeLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 },
+  badgeLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 10,
+  },
   smallBtn: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  smallBtnText: { fontWeight: "900", color: "#111", fontSize: 12 },
+  smallBtnText: { fontWeight: '900', color: '#111', fontSize: 12 },
 
   iconMiniBtn: {
     width: 38,
     height: 38,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 8,
   },
 
   dropdown: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  dropdownText: { fontWeight: "800", color: "#111", flex: 1, paddingRight: 10 },
+  dropdownText: { fontWeight: '800', color: '#111', flex: 1, paddingRight: 10 },
 
   searchRowLight: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
   },
-  searchInputDark: { flex: 1, color: "#111", fontWeight: "800" },
+  searchInputDark: { flex: 1, color: '#111', fontWeight: '800' },
   pickItem: {
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderRadius: 12,
   },
-  pickText: { fontWeight: "800", color: "#111" },
+  pickText: { fontWeight: '800', color: '#111' },
 
   selChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(47,165,169,0.12)",
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(47,165,169,0.12)',
     borderRadius: 999,
     paddingLeft: 12,
     paddingRight: 8,
     paddingVertical: 10,
     gap: 10,
   },
-  selChipText: { fontWeight: "900", color: "#0F766E", maxWidth: 170 },
+  selChipText: { fontWeight: '900', color: '#0F766E', maxWidth: 170 },
   selChipX: {
     width: 26,
     height: 26,
     borderRadius: 10,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   pickRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: "#EEF0F3",
+    borderColor: '#EEF0F3',
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
   },
-  pickRowOn: { backgroundColor: "rgba(47,165,169,0.06)", borderColor: "rgba(47,165,169,0.35)" },
-  pickLeft: { width: 26, alignItems: "center" },
-  pickName: { fontWeight: "900", color: "#111" },
-  pickSub: { marginTop: 4, fontWeight: "800", color: "#6B6B70", fontSize: 12 },
+  pickRowOn: {
+    backgroundColor: 'rgba(47,165,169,0.06)',
+    borderColor: 'rgba(47,165,169,0.35)',
+  },
+  pickLeft: { width: 26, alignItems: 'center' },
+  pickName: { fontWeight: '900', color: '#111' },
+  pickSub: { marginTop: 4, fontWeight: '800', color: '#6B6B70', fontSize: 12 },
   pickRight: { marginLeft: 8 },
-  pickTag: { fontWeight: "900", color: "#111", fontSize: 11 },
+  pickTag: { fontWeight: '900', color: '#111', fontSize: 11 },
 
   passRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: "#EEF0F3",
+    borderColor: '#EEF0F3',
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
   },
-  passCheck: { width: 30, alignItems: "center" },
+  passCheck: { width: 30, alignItems: 'center' },
   avgBox: {
     width: 86,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    alignItems: "stretch",
+    alignItems: 'stretch',
   },
-  avgLabel: { fontWeight: "900", color: "#6B6B70", fontSize: 11 },
-  avgInput: { paddingVertical: 6, fontWeight: "900", color: "#111" },
+  avgLabel: { fontWeight: '900', color: '#6B6B70', fontSize: 11 },
+  avgInput: { paddingVertical: 6, fontWeight: '900', color: '#111' },
 });

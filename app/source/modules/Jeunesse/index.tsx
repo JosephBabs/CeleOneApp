@@ -187,7 +187,6 @@ export default function Jeunesse() {
       let snap = await getDocs(
         query(
           collection(db, "jeunesse_quizzes"),
-          where("isActive", "==", true),
           orderBy("createdAt", "desc"),
           limit(1)
         )
@@ -425,7 +424,6 @@ export default function Jeunesse() {
     try {
       const qy = query(
         collection(db, "jeunesse_quiz_attempts"),
-        where("quizId", "==", activeQuiz.id),
         where("identifier", "==", identifier.trim()),
         limit(1)
       );
@@ -526,9 +524,8 @@ export default function Jeunesse() {
       const qy = query(
         collection(db, "jeunesse_quiz_attempts"),
         where("identifier", "==", identifier.trim()),
-        orderBy("submittedAt", "desc"),
         limit(50)
-      );
+        );
       const snap = await getDocs(qy);
       setAttempts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e: any) {
