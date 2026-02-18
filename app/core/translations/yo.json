@@ -70,48 +70,146 @@
 
   "jeunesse": {
     "title": "Ọdọ́",
-    "childrenAndYouth": "Ìṣe àwọn ọmọde àti ọdọ́",
-    "amisDeJesus": "Amis de Jésus (Ìjọ Celestial)",
-    "registerChild": "Forúkọsílẹ̀ ọmọ",
-    "checkResults": "Ṣàyẹ̀wò abajade concours",
-    "identifier": "Ìdánimọ̀",
-    "enterIdentifier": "Tẹ ìdánimọ̀",
-    "search": "Wá",
-    "results": "Abajade",
-    "noResults": "A kò rí abajade kankan.",
-    "openPhases": "Ìpele concours",
-    "preselection": "Preselection",
-    "selection": "Selection",
-    "final": "Ìpele Ikẹyìn (Seme 2024)",
-    "shortlisted": "Àwọn tí a yàn",
-    "viewList": "Wo àtòjọ",
-    "close": "Tì",
-    "firstName": "Orúkọ àkọ́kọ́",
-    "lastName": "Orúkọ ìdílé",
-    "age": "Ọmọ ọdún",
-    "currentClass": "Kíláàsì lọ́wọ́lọwọ́",
-    "academicYear": "Ọdún ẹ̀kọ́",
-    "parishName": "Orúkọ parish",
-    "shepherdNames": "Orúkọ(s) olùṣọ́",
-    "teacherNames": "Orúkọ(s) olùkọ́",
-    "shepherdPhone": "Fóònù olùṣọ́",
-    "teacherPhone": "Fóònù olùkọ́",
-    "email": "Email",
-    "country": "Orílẹ̀-èdè",
-    "province": "Province",
-    "city": "Ìlú",
-    "region": "Agbègbè",
-    "subRegion": "Agbègbè kékeré",
-    "submit": "Firanṣẹ́",
-    "saved": "A fipamọ́",
-    "saveFailed": "Kò fipamọ́",
+    "childrenAndYouth": "Àwọn Ọmọde àti Ọdọ",
+    "amisDeJesus": "Àwọn Ọrẹ Jesu",
+    "enterIdentifier": "Tẹ ID/àmì-ìdánimọ̀ (àpẹẹrẹ: JXXXX)",
+    "identifier": "Àmì-ìdánimọ̀ (ID)",
+
+    "results": "Àbájáde",
+    "noResults": "Kò sí àbájáde",
+    "saved": "A ti fipamọ́",
+    "saveFailed": "Fifipamọ́ kuna",
+    "submitQuiz": "Firanṣẹ quiz",
+
     "weeklyQuiz": "Quiz ọ̀sẹ̀",
-    "startQuiz": "Bẹrẹ quiz",
-    "timeLeft": "Àkókò tó kù: {{sec}}s",
-    "submitQuiz": "Fi ránṣẹ́",
-    "score": "Score: {{score}}/{{total}}",
-    "alreadyPlayed": "O ti ṣe quiz yìí tẹ́lẹ̀.",
-    "quizNotAvailable": "Quiz kò sí."
+    "quizNotAvailable": "Kò sí quiz",
+    "alreadyPlayed": "O ti kópa nínú quiz yìí tẹ́lẹ̀",
+
+    "ui": {
+      "tabs": {
+        "home": "Ile",
+        "results": "Àbájáde",
+        "quiz": "Quiz",
+        "register": "Forúkọsílẹ̀",
+        "history": "Ìtàn"
+      },
+
+      "home": {
+        "title": "Kalẹ́ńdà idije",
+        "badgeYear": "Ọdún {{year}}",
+        "subtitle": "Wo ọjọ́ àti àkókò fún gbogbo ìpele. Tẹ “Àwọn Olùdíje” láti rí àkójọ (bí ó bá wà).",
+        "candidatesCount": "Àwọn olùdíje: {{count}}",
+        "quickActionsTitle": "Ìṣe kíákíá",
+        "quickActionsSub": "Wá àbájáde, ṣe quiz, tàbí forúkọsílẹ̀ ọmọ.",
+        "searchResults": "Wá àbájáde",
+        "openQuiz": "Ṣí quiz",
+        "register": "Forúkọsílẹ̀"
+      },
+
+      "results": {
+        "title": "Wíwá àbájáde",
+        "subtitle": "Tẹ ID rẹ n’órí, kí o sì wá. O tún lè yí ọdún padà ní òkè ọ̀tún.",
+        "checking": "Ń ṣàyẹ̀wò…",
+        "search": "Wá",
+        "emptyTitle": "Kò tíì sí àbájáde",
+        "emptySub": "Tí admin bá gbe ọ sí idije tó kàn, àbájáde rẹ yóò hàn níbí.",
+        "pastYearsTitle": "Ọdún tó kọjá",
+        "pastYearsSub": "Lo yíyàn ọdún ní òkè láti wo àbájáde ọdún tó kọjá.",
+        "avg": "Àárín"
+      },
+
+      "quiz": {
+        "title": "Quiz ọ̀sẹ̀",
+        "loading": "Ń gba quiz…",
+        "emptyTitle": "Kò sí quiz",
+        "emptySub": "Gbìyànjú lẹ́yìn náà.",
+        "questionsInfo": "Ìbéèrè {{count}} · {{sec}}s",
+        "start": "Bẹrẹ quiz",
+        "viewHistory": "Wo ìtàn score",
+        "importantTitle": "Pataki",
+        "importantSub": "ID rẹ jẹ́ dandan kí o kópa (kí a lè rí score àti àbájáde rẹ lẹ́yìn)."
+      },
+
+      "register": {
+        "title": "Forúkọsílẹ̀ ọmọ",
+        "badgeNew": "Tuntun",
+        "subtitle": "Lẹ́yìn tí o bá fipamọ́, iwọ yóò gba ID. Pa á mọ́ kí o lè wá àbájáde àti ṣe quiz.",
+        "submit": "Firanṣẹ forúkọsílẹ̀",
+        "requiredFields": "Jọ̀wọ́ kún gbogbo ibi tó yẹ."
+      },
+
+      "history": {
+        "title": "Ìtàn score (quiz)",
+        "refresh": "Tún ṣe",
+        "subtitle": "Score wà lórí ID rẹ.",
+        "loading": "Ń gba…",
+        "emptyTitle": "Kò sí ìgbìyànjú",
+        "emptySub": "Ṣe quiz kan kí ìtàn score rẹ lè hàn níbí.",
+        "tipTitle": "Imọ̀ràn",
+        "tipSub": "Bí o bá yí fónù padà, ID rẹ ṣi máa ṣiṣẹ́—kan tẹ̀ é síi lẹ́ẹ̀kansi.",
+        "scoreLabel": "Score: {{score}}/{{total}}",
+        "modeAuto": "Aifọwọyi",
+        "modeManual": "Ọwọ́"
+      },
+
+      "picker": {
+        "selectYear": "Yan ọdún",
+        "sub": "Wo ọjọ́ idije àti àbájáde fún ọdún kan"
+      },
+
+      "candidatesModal": {
+        "sub": "Àkójọ àwọn olùdíje (bí admin bá ti ṣètò)",
+        "candidatesTitle": "Àwọn olùdíje",
+        "noCandidates": "Kò sí olùdíje tí a ṣètò fún ìpele yìí."
+      },
+
+      "quizModal": {
+        "timeLeft": "Àkókò tó kù: {{sec}}s",
+        "noQuestion": "Kò sí ìbéèrè.",
+        "prev": "Ẹ̀yìn",
+        "next": "Tẹ̀síwájú",
+        "submit": "Firanṣẹ"
+      },
+
+      "alerts": {
+        "enterIdentifierTitle": "Àbájáde",
+        "enterIdentifierMsg": "Tẹ ID rẹ",
+        "historyTitle": "Ìtàn",
+        "historyEnterId": "Tẹ ID rẹ kọ́kọ́.",
+        "quizTitle": "Quiz"
+      },
+
+      "fields": {
+        "firstName": "Orúkọ àkọ́kọ́",
+        "lastName": "Orúkọ ìdílé",
+        "age": "Ọjọ́-ori",
+        "class": "Kíláàsì",
+        "academicYear": "Ọdún ẹ̀kọ́ (àpẹẹrẹ: 2025-2026)",
+        "parishName": "Orúkọ parish",
+        "parishShepherdNames": "Orúkọ alábòójútó parish",
+        "mainTeacherNames": "Orúkọ olùkọ́ pàtàkì",
+        "shepherdPhone": "Fóònù alábòójútó",
+        "teacherPhone": "Fóònù olùkọ́",
+        "email": "Ìmeèlì",
+        "country": "Orílẹ̀-èdè",
+        "province": "Ìpínlẹ̀",
+        "city": "Ìlú",
+        "region": "Agbègbè",
+        "subRegion": "Agbègbè kékeré"
+      },
+
+      "phases": {
+        "prelim": "Ìpele ìbẹ̀rẹ̀",
+        "preselection": "Ìyàn àkọ́kọ́",
+        "selection": "Ìyàn",
+        "final": "Ìpele ikẹhin"
+      },
+
+      "misc": {
+        "loading": "Ń gba…",
+        "idLabel": "ID"
+      }
+    }
   },
   "adminJeunesse": {
     "title": "Admin Ọdọ́",

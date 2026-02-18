@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+/* eslint-disable react/no-unstable-nested-components */
+// AdminMusicAndFilms.tsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,9 +12,10 @@ import {
   FlatList,
   ScrollView,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
   Linking,
+  Keyboard,
+  Pressable,
 } from "react-native";
 
 import Modal from "react-native-modal";
@@ -32,6 +35,10 @@ import {
 } from "firebase/firestore";
 
 import * as ImagePicker from "react-native-image-picker";
+import { pick, types, isCancel } from "@react-native-documents/picker";
+
+import { ENV } from "../../../../src/config/env";
+import { uploadFileToCDN } from "../../../../src/chat/upload";
 
 /* ================= TYPES ================= */
 
@@ -42,9 +49,17 @@ export interface Music {
   album?: string;
   genre?: string;
   duration?: string;
-  coverUrl?: string;
-  audioUrl?: string;
+  coverUrl?: string; // local uri or CDN url
+  audioUrl?: string; // CDN url
   description?: string;
+
+  year?: string;
+  language?: string;
+  country?: string;
+  label?: string;
+  composers?: string;
+  producers?: string;
+  explicit?: boolean;
 }
 
 export interface Film {
@@ -54,13 +69,25 @@ export interface Film {
   genre?: string;
   duration?: string;
   coverUrl?: string;
-  videoUrl?: string;
+  videoUrl?: string; // CDN url
   description?: string;
   cast?: string;
   rating?: string;
+
+  year?: string;
+  language?: string;
+  country?: string;
+  trailerUrl?: string;
+  producers?: string;
+  writers?: string;
+
+  // ✅ quality metadata you can store
+  videoQuality?: VideoQuality;
 }
 
 type ContentType = "music" | "film";
+
+type VideoQuality = "auto" | "240p" | "360p" | "480p" | "720p" | "1080p";
 
 /* ================= COMPONENT ================= */
 
@@ -83,6 +110,12 @@ export default function AdminMusicAndFilms() {
 
   const [newMusic, setNewMusic] = useState<Partial<Music>>({});
   const [newFilm, setNewFilm] = useState<Partial<Film>>({});
+
+  // ✅ prevents keyboard closing while typing + avoids empty space:
+  // - do NOT wrap inputs in KeyboardAvoidingView inside modal
+  // - use react-native-modal avoidKeyboard
+  // - keep sheet height stable and allow scroll
+  const sheetScrollRef = useRef<ScrollView | null>(null);
 
   /* ================= FETCH ================= */
 
@@ -108,7 +141,10 @@ export default function AdminMusicAndFilms() {
     fetchData();
   }, [fetchData]);
 
-  const list = useMemo(() => (contentType === "music" ? musics : films), [contentType, musics, films]);
+  const list = useMemo(
+    () => (contentType === "music" ? musics : films),
+    [contentType, musics, films]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -116,7 +152,10 @@ export default function AdminMusicAndFilms() {
 
     return list.filter((item: any) => {
       const t = String(item.title || "").toLowerCase();
-      const sub = contentType === "music" ? String((item as any).artist || "").toLowerCase() : String((item as any).director || "").toLowerCase();
+      const sub =
+        contentType === "music"
+          ? String((item as any).artist || "").toLowerCase()
+          : String((item as any).director || "").toLowerCase();
       const g = String(item.genre || "").toLowerCase();
       return t.includes(q) || sub.includes(q) || g.includes(q);
     });
@@ -135,9 +174,9 @@ export default function AdminMusicAndFilms() {
     }
   };
 
-  /* ================= IMAGE PICKER ================= */
+  /* ================= PICK COVER IMAGE ================= */
 
-  const pickImage = async (isEdit: boolean) => {
+  const pickCoverImage = async () => {
     const res = await ImagePicker.launchImageLibrary({
       mediaType: "photo",
       selectionLimit: 1,
@@ -148,25 +187,83 @@ export default function AdminMusicAndFilms() {
     const asset = res.assets?.[0];
     if (!asset?.uri) return;
 
-    // NOTE: This returns local URI. If you want a permanent URL,
-    // upload to Firebase Storage then save the download URL.
     const coverUrl = asset.uri;
+    if (contentType === "music") setNewMusic((p) => ({ ...p, coverUrl }));
+    else setNewFilm((p) => ({ ...p, coverUrl }));
+  };
 
-    if (contentType === "music") {
-      if (isEdit) setNewMusic((p) => ({ ...p, coverUrl }));
-      else setNewMusic((p) => ({ ...p, coverUrl }));
-    } else {
-      if (isEdit) setNewFilm((p) => ({ ...p, coverUrl }));
-      else setNewFilm((p) => ({ ...p, coverUrl }));
+  /* ================= UPLOAD HELPERS ================= */
+
+  const uploadToCDN = async (file: { uri: string; name: string; type: string }) => {
+    if (!ENV?.uploadKey) throw new Error("Missing ENV.uploadKey");
+    return await uploadFileToCDN(file, ENV.uploadKey);
+  };
+
+  /* ================= UPLOAD AUDIO (MUSIC) ================= */
+
+  const pickAndUploadAudio = async () => {
+    try {
+      const res = await pick({
+        allowMultiSelection: false,
+        type: [types.audio, types.allFiles],
+      });
+
+      const f = res?.[0];
+      if (!f?.uri) return;
+
+      setBusy(true);
+      const url = await uploadToCDN({
+        uri: f.uri,
+        name: f.name ?? `audio_${Date.now()}.mp3`,
+        type: f.type ?? "audio/mpeg",
+      });
+
+      setNewMusic((p) => ({ ...p, audioUrl: url }));
+      Alert.alert("Uploaded", "Audio uploaded successfully");
+    } catch (e: any) {
+      if (isCancel(e)) return;
+      Alert.alert("Upload error", e?.message || "Failed to upload audio");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* ================= UPLOAD VIDEO (FILMS) ================= */
+
+  const pickAndUploadVideo = async () => {
+    try {
+      const res = await pick({
+        allowMultiSelection: false,
+        type: [types.video, types.allFiles],
+      });
+
+      const f = res?.[0];
+      if (!f?.uri) return;
+
+      setBusy(true);
+      const url = await uploadToCDN({
+        uri: f.uri,
+        name: f.name ?? `video_${Date.now()}.mp4`,
+        type: f.type ?? "video/mp4",
+      });
+
+      setNewFilm((p) => ({ ...p, videoUrl: url }));
+      Alert.alert("Uploaded", "Video uploaded successfully");
+    } catch (e: any) {
+      if (isCancel(e)) return;
+      Alert.alert("Upload error", e?.message || "Failed to upload video");
+    } finally {
+      setBusy(false);
     }
   };
 
   /* ================= CREATE ================= */
 
   const openCreate = () => {
+    Keyboard.dismiss();
     setEditingItem(null);
     if (contentType === "music") setNewMusic({});
-    else setNewFilm({});
+    else setNewFilm({ videoQuality: "auto" });
     setCreateOpen(true);
   };
 
@@ -183,6 +280,7 @@ export default function AdminMusicAndFilms() {
         artist: newMusic.artist.trim(),
         createdBy: auth.currentUser?.uid,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       setCreateOpen(false);
       setNewMusic({});
@@ -200,6 +298,10 @@ export default function AdminMusicAndFilms() {
       Alert.alert("Validation", "Title and Director required");
       return;
     }
+    if (!newFilm.videoUrl?.trim()) {
+      Alert.alert("Validation", "Please upload a video (or paste a video URL)");
+      return;
+    }
     try {
       setBusy(true);
       await addDoc(collection(db, "videos"), {
@@ -208,9 +310,10 @@ export default function AdminMusicAndFilms() {
         director: newFilm.director.trim(),
         createdBy: auth.currentUser?.uid,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       setCreateOpen(false);
-      setNewFilm({});
+      setNewFilm({ videoQuality: "auto" });
       fetchData();
     } catch (e) {
       console.error(e);
@@ -223,11 +326,12 @@ export default function AdminMusicAndFilms() {
   /* ================= UPDATE ================= */
 
   const openEdit = (item: Music | Film) => {
+    Keyboard.dismiss();
     setEditingItem(item);
     const isMusic = "artist" in item;
     setContentType(isMusic ? "music" : "film");
-    if (isMusic) setNewMusic(item);
-    else setNewFilm(item);
+    if (isMusic) setNewMusic({ ...(item as Music) });
+    else setNewFilm({ videoQuality: "auto", ...(item as Film) });
     setEditOpen(true);
   };
 
@@ -283,36 +387,31 @@ export default function AdminMusicAndFilms() {
   /* ================= RENDER ITEM ================= */
 
   const renderItem = ({ item }: { item: Music | Film }) => {
-    const sub = "artist" in item ? item.artist : item.director;
-    const url = "artist" in item ? item.audioUrl : item.videoUrl;
+    const isMusic = "artist" in item;
+    const sub = isMusic ? (item as Music).artist : (item as Film).director;
+    const url = isMusic ? (item as Music).audioUrl : (item as Film).videoUrl;
 
     return (
       <TouchableOpacity activeOpacity={0.92} onPress={() => openEdit(item)} style={styles.card}>
-        {/* cover */}
         <View style={styles.coverWrap}>
           {item.coverUrl ? (
             <Image source={{ uri: item.coverUrl }} style={styles.cover} />
           ) : (
             <View style={styles.coverFallback}>
-              <Ionicons name={contentType === "music" ? "musical-notes-outline" : "film-outline"} size={22} color="#6B6B70" />
+              <Ionicons name={isMusic ? "musical-notes-outline" : "film-outline"} size={22} color="#6B6B70" />
             </View>
           )}
         </View>
 
-        {/* body */}
         <View style={{ flex: 1 }}>
           <View style={styles.titleRow}>
-            <Text style={styles.name} numberOfLines={1}>
-              {item.title}
-            </Text>
+            <Text style={styles.name} numberOfLines={1}>{item.title}</Text>
             <View style={styles.typePill}>
-              <Text style={styles.typePillText}>{contentType === "music" ? "MUSIC" : "FILM"}</Text>
+              <Text style={styles.typePillText}>{isMusic ? "MUSIC" : "FILM"}</Text>
             </View>
           </View>
 
-          <Text style={styles.desc} numberOfLines={1}>
-            {sub || "—"}
-          </Text>
+          <Text style={styles.desc} numberOfLines={1}>{sub || "—"}</Text>
 
           <View style={styles.chipsRow}>
             {!!(item as any).genre && (
@@ -327,10 +426,21 @@ export default function AdminMusicAndFilms() {
                 <Text style={styles.chipText}>{(item as any).duration}</Text>
               </View>
             )}
+            {!!(item as any).year && (
+              <View style={styles.chip}>
+                <Ionicons name="calendar-outline" size={14} color="#6B6B70" />
+                <Text style={styles.chipText}>{(item as any).year}</Text>
+              </View>
+            )}
+            {!isMusic && !!(item as any).videoQuality && (
+              <View style={styles.chip}>
+                <Ionicons name="videocam-outline" size={14} color="#6B6B70" />
+                <Text style={styles.chipText}>{(item as any).videoQuality}</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* actions */}
         <View style={styles.actions}>
           {!!url && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => openUrl(url)}>
@@ -340,7 +450,7 @@ export default function AdminMusicAndFilms() {
 
           <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: "rgba(239,68,68,0.12)" }]}
-            onPress={() => deleteItem("artist" in item ? "songs" : "videos", item.id)}
+            onPress={() => deleteItem(isMusic ? "songs" : "videos", item.id)}
           >
             <Ionicons name="trash-outline" size={18} color="#EF4444" />
           </TouchableOpacity>
@@ -349,48 +459,59 @@ export default function AdminMusicAndFilms() {
     );
   };
 
-  /* ================= SHEET FORM ================= */
+  /* ================= SHEET FORM (NO KeyboardAvoidingView) ================= */
 
   const SheetForm = ({ mode }: { mode: "create" | "edit" }) => {
     const isMusic = contentType === "music";
     const data = isMusic ? newMusic : newFilm;
 
-    return (
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <View>
-              <Text style={styles.sheetTitle}>{mode === "create" ? (isMusic ? "Add Music" : "Add Film") : isMusic ? "Edit Music" : "Edit Film"}</Text>
-              <Text style={styles.sheetSub}>Fill the fields and save</Text>
-            </View>
+    const close = () => {
+      if (busy) return;
+      Keyboard.dismiss();
+      if (mode === "create") setCreateOpen(false);
+      else setEditOpen(false);
+    };
 
-            <TouchableOpacity
-              onPress={() => {
-                if (mode === "create") setCreateOpen(false);
-                else setEditOpen(false);
-              }}
-              disabled={busy}
-              style={styles.sheetClose}
-            >
-              <Ionicons name="close" size={18} color="#111" />
-            </TouchableOpacity>
+    const setVideoQuality = (q: VideoQuality) => setNewFilm((p) => ({ ...p, videoQuality: q }));
+
+    return (
+      <View style={styles.sheet}>
+        <View style={styles.sheetHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sheetTitle}>
+              {mode === "create" ? (isMusic ? "Add Music" : "Add Film") : isMusic ? "Edit Music" : "Edit Film"}
+            </Text>
+            <Text style={styles.sheetSub}>Fill the fields and save</Text>
           </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+          <TouchableOpacity onPress={close} disabled={busy} style={styles.sheetClose}>
+            <Ionicons name="close" size={18} color="#111" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          ref={(r) => (sheetScrollRef.current = r)}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 22 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+        >
+          {/* Tap outside inputs to dismiss keyboard (but do NOT close modal) */}
+          <Pressable onPress={Keyboard.dismiss}>
             {/* Cover */}
-            <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage(mode === "edit")} activeOpacity={0.9}>
+            <TouchableOpacity style={styles.imagePicker} onPress={pickCoverImage} activeOpacity={0.9} disabled={busy}>
               {data.coverUrl ? (
                 <Image source={{ uri: data.coverUrl }} style={styles.coverImage} />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="image-outline" size={36} color="#999" />
                   <Text style={styles.imagePlaceholderText}>Tap to select cover image</Text>
-                  <Text style={styles.imageHint}>Local URI (upload to Storage later for permanent URL)</Text>
+                  <Text style={styles.imageHint}>Tip: upload cover to CDN later if needed</Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            {/* Common */}
+            {/* Title */}
             <Field label="Title *">
               <TextInput
                 style={styles.input}
@@ -398,6 +519,7 @@ export default function AdminMusicAndFilms() {
                 placeholderTextColor="#8C8C8F"
                 value={(data.title as any) || ""}
                 onChangeText={(v) => (isMusic ? setNewMusic((p) => ({ ...p, title: v })) : setNewFilm((p) => ({ ...p, title: v })))}
+                returnKeyType="next"
               />
             </Field>
 
@@ -443,13 +565,90 @@ export default function AdminMusicAndFilms() {
                   />
                 </Field>
 
-                <Field label="Audio URL">
+                <Field label="Audio (upload to CDN)">
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.uploadBtn, busy && { opacity: 0.7 }]}
+                      onPress={pickAndUploadAudio}
+                      disabled={busy}
+                      activeOpacity={0.9}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={18} color="#111" />
+                      <Text style={styles.uploadBtnText}>{newMusic.audioUrl ? "Replace audio" : "Upload audio"}</Text>
+                    </TouchableOpacity>
+
+                    {!!newMusic.audioUrl && (
+                      <TouchableOpacity style={styles.openBtn} onPress={() => openUrl(newMusic.audioUrl)} activeOpacity={0.9}>
+                        <Ionicons name="open-outline" size={18} color="#111" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {!!newMusic.audioUrl && (
+                    <Text style={styles.smallHint} numberOfLines={2}>
+                      {newMusic.audioUrl}
+                    </Text>
+                  )}
+                </Field>
+
+                <Field label="Year">
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter audio URL"
+                    placeholder="e.g., 2026"
                     placeholderTextColor="#8C8C8F"
-                    value={(newMusic.audioUrl as any) || ""}
-                    onChangeText={(v) => setNewMusic((p) => ({ ...p, audioUrl: v }))}
+                    value={(newMusic.year as any) || ""}
+                    onChangeText={(v) => setNewMusic((p) => ({ ...p, year: v }))}
+                    keyboardType="number-pad"
+                  />
+                </Field>
+
+                <Field label="Language">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., English"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newMusic.language as any) || ""}
+                    onChangeText={(v) => setNewMusic((p) => ({ ...p, language: v }))}
+                  />
+                </Field>
+
+                <Field label="Country">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Benin"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newMusic.country as any) || ""}
+                    onChangeText={(v) => setNewMusic((p) => ({ ...p, country: v }))}
+                  />
+                </Field>
+
+                <Field label="Label">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Independent"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newMusic.label as any) || ""}
+                    onChangeText={(v) => setNewMusic((p) => ({ ...p, label: v }))}
+                  />
+                </Field>
+
+                <Field label="Producers">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Comma separated"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newMusic.producers as any) || ""}
+                    onChangeText={(v) => setNewMusic((p) => ({ ...p, producers: v }))}
+                  />
+                </Field>
+
+                <Field label="Composers">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Comma separated"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newMusic.composers as any) || ""}
+                    onChangeText={(v) => setNewMusic((p) => ({ ...p, composers: v }))}
                   />
                 </Field>
 
@@ -496,20 +695,82 @@ export default function AdminMusicAndFilms() {
                   />
                 </Field>
 
-                <Field label="Video URL">
+                {/* ✅ Video Upload + URL */}
+                <Field label="Video (upload to CDN)">
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.uploadBtn, busy && { opacity: 0.7 }]}
+                      onPress={pickAndUploadVideo}
+                      disabled={busy}
+                      activeOpacity={0.9}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={18} color="#111" />
+                      <Text style={styles.uploadBtnText}>{newFilm.videoUrl ? "Replace video" : "Upload video"}</Text>
+                    </TouchableOpacity>
+
+                    {!!newFilm.videoUrl && (
+                      <TouchableOpacity style={styles.openBtn} onPress={() => openUrl(newFilm.videoUrl)} activeOpacity={0.9}>
+                        <Ionicons name="open-outline" size={18} color="#111" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {!!newFilm.videoUrl && (
+                    <Text style={styles.smallHint} numberOfLines={2}>
+                      {newFilm.videoUrl}
+                    </Text>
+                  )}
+
+                  <View style={styles.divider} />
+
+                  <Text style={styles.microLabel}>Or paste video URL</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter video URL"
+                    placeholder="https://..."
                     placeholderTextColor="#8C8C8F"
                     value={(newFilm.videoUrl as any) || ""}
                     onChangeText={(v) => setNewFilm((p) => ({ ...p, videoUrl: v }))}
+                    autoCapitalize="none"
+                  />
+                </Field>
+
+                {/* ✅ Video Quality (metadata selection) */}
+                <Field label="Video Quality">
+                  <View style={styles.qualityRow}>
+                    {(["auto", "240p", "360p", "480p", "720p", "1080p"] as VideoQuality[]).map((q) => {
+                      const on = (newFilm.videoQuality || "auto") === q;
+                      return (
+                        <TouchableOpacity
+                          key={q}
+                          activeOpacity={0.9}
+                          onPress={() => setVideoQuality(q)}
+                          style={[styles.qPill, on && styles.qPillOn]}
+                        >
+                          <Text style={[styles.qPillText, on && styles.qPillTextOn]}>{q.toUpperCase()}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={styles.smallHint}>
+                    This stores selected quality as metadata. (Actual transcoding needs server-side processing.)
+                  </Text>
+                </Field>
+
+                <Field label="Trailer URL">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="https://..."
+                    placeholderTextColor="#8C8C8F"
+                    value={(newFilm.trailerUrl as any) || ""}
+                    onChangeText={(v) => setNewFilm((p) => ({ ...p, trailerUrl: v }))}
+                    autoCapitalize="none"
                   />
                 </Field>
 
                 <Field label="Cast">
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter cast members"
+                    placeholder="Comma separated"
                     placeholderTextColor="#8C8C8F"
                     value={(newFilm.cast as any) || ""}
                     onChangeText={(v) => setNewFilm((p) => ({ ...p, cast: v }))}
@@ -526,6 +787,57 @@ export default function AdminMusicAndFilms() {
                   />
                 </Field>
 
+                <Field label="Year">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 2026"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newFilm.year as any) || ""}
+                    onChangeText={(v) => setNewFilm((p) => ({ ...p, year: v }))}
+                    keyboardType="number-pad"
+                  />
+                </Field>
+
+                <Field label="Language">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., French"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newFilm.language as any) || ""}
+                    onChangeText={(v) => setNewFilm((p) => ({ ...p, language: v }))}
+                  />
+                </Field>
+
+                <Field label="Country">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Nigeria"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newFilm.country as any) || ""}
+                    onChangeText={(v) => setNewFilm((p) => ({ ...p, country: v }))}
+                  />
+                </Field>
+
+                <Field label="Writers">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Comma separated"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newFilm.writers as any) || ""}
+                    onChangeText={(v) => setNewFilm((p) => ({ ...p, writers: v }))}
+                  />
+                </Field>
+
+                <Field label="Producers">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Comma separated"
+                    placeholderTextColor="#8C8C8F"
+                    value={(newFilm.producers as any) || ""}
+                    onChangeText={(v) => setNewFilm((p) => ({ ...p, producers: v }))}
+                  />
+                </Field>
+
                 <Field label="Description">
                   <TextInput
                     style={styles.textarea}
@@ -538,30 +850,27 @@ export default function AdminMusicAndFilms() {
                 </Field>
               </>
             )}
+          </Pressable>
 
-            <View style={styles.sheetBtns}>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: "#F2F3F5" }]}
-                onPress={() => {
-                  if (busy) return;
-                  if (mode === "create") setCreateOpen(false);
-                  else setEditOpen(false);
-                }}
-              >
-                <Text style={[styles.btnText, { color: "#444" }]}>Cancel</Text>
-              </TouchableOpacity>
+          <View style={styles.sheetBtns}>
+            <TouchableOpacity
+              style={[styles.btn, { backgroundColor: "#F2F3F5" }]}
+              onPress={close}
+              disabled={busy}
+            >
+              <Text style={[styles.btnText, { color: "#444" }]}>Cancel</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: COLORS.light.primary }, busy && { opacity: 0.7 }]}
-                onPress={mode === "create" ? (isMusic ? createMusic : createFilm) : updateItem}
-                disabled={busy}
-              >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.btnText, { color: "#fff" }]}>{mode === "create" ? "Save" : "Update"}</Text>}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={[styles.btn, { backgroundColor: COLORS.light.primary }, busy && { opacity: 0.7 }]}
+              onPress={mode === "create" ? (isMusic ? createMusic : createFilm) : updateItem}
+              disabled={busy}
+            >
+              {busy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.btnText, { color: "#fff" }]}>{mode === "create" ? "Save" : "Update"}</Text>}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
     );
   };
 
@@ -651,6 +960,7 @@ export default function AdminMusicAndFilms() {
           keyExtractor={(item: any) => item.id}
           contentContainerStyle={{ padding: 14, paddingBottom: 30 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
@@ -663,13 +973,33 @@ export default function AdminMusicAndFilms() {
         />
       )}
 
-      {/* Create Sheet */}
-      <Modal isVisible={createOpen} onBackdropPress={() => !busy && setCreateOpen(false)} style={{ margin: 0, justifyContent: "flex-end" }}>
+      {/* ✅ Create Sheet (NO KeyboardAvoidingView; avoidKeyboard handled by Modal) */}
+      <Modal
+        isVisible={createOpen}
+        onBackdropPress={() => !busy && (Keyboard.dismiss(), setCreateOpen(false))}
+        onBackButtonPress={() => !busy && (Keyboard.dismiss(), setCreateOpen(false))}
+        style={styles.sheetModal}
+        backdropOpacity={0.45}
+        useNativeDriver
+        hideModalContentWhileAnimating
+        avoidKeyboard
+        propagateSwipe
+      >
         <SheetForm mode="create" />
       </Modal>
 
-      {/* Edit Sheet */}
-      <Modal isVisible={editOpen} onBackdropPress={() => !busy && setEditOpen(false)} style={{ margin: 0, justifyContent: "flex-end" }}>
+      {/* ✅ Edit Sheet */}
+      <Modal
+        isVisible={editOpen}
+        onBackdropPress={() => !busy && (Keyboard.dismiss(), setEditOpen(false))}
+        onBackButtonPress={() => !busy && (Keyboard.dismiss(), setEditOpen(false))}
+        style={styles.sheetModal}
+        backdropOpacity={0.45}
+        useNativeDriver
+        hideModalContentWhileAnimating
+        avoidKeyboard
+        propagateSwipe
+      >
         <SheetForm mode="edit" />
       </Modal>
     </View>
@@ -784,8 +1114,16 @@ const styles = StyleSheet.create({
   emptyTitle: { marginTop: 14, fontWeight: "900", fontSize: 16, color: "#111" },
   emptySub: { marginTop: 6, fontWeight: "700", color: "#6B6B70", textAlign: "center" },
 
-  // Sheets
-  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: "92%", overflow: "hidden" },
+  sheetModal: { margin: 0, justifyContent: "flex-end" },
+
+  // ✅ important: stable height + no KeyboardAvoidingView = no empty space & keyboard won't collapse
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    height: "92%",
+    overflow: "hidden",
+  },
   sheetHeader: {
     paddingHorizontal: 16,
     paddingTop: 14,
@@ -795,12 +1133,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
   },
   sheetTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
   sheetSub: { marginTop: 4, fontSize: 12.5, fontWeight: "700", color: "#6B6B70" },
   sheetClose: { width: 40, height: 40, borderRadius: 14, backgroundColor: "#F2F3F5", alignItems: "center", justifyContent: "center" },
 
   label: { fontSize: 13, fontWeight: "900", color: "#111", marginBottom: 8 },
+  microLabel: { fontSize: 12, fontWeight: "900", color: "#111", marginBottom: 8, marginTop: 8 },
 
   input: {
     backgroundColor: "#F6F7F9",
@@ -835,6 +1175,57 @@ const styles = StyleSheet.create({
   imagePlaceholder: { alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
   imagePlaceholderText: { marginTop: 10, fontWeight: "900", color: "#666", textAlign: "center" },
   imageHint: { marginTop: 6, fontWeight: "700", color: "#999", textAlign: "center", fontSize: 12 },
+
+  uploadBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#F6F7F9",
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  uploadBtnText: { fontWeight: "900", color: "#111" },
+
+  openBtn: {
+    width: 54,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#F6F7F9",
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  smallHint: {
+    marginTop: 8,
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#6B6B70",
+  },
+
+  divider: { height: 1, backgroundColor: "#EEF0F3", marginVertical: 10 },
+
+  // quality pills
+  qualityRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  qPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#F6F7F9",
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+  },
+  qPillOn: {
+    backgroundColor: "rgba(47,165,169,0.12)",
+    borderColor: "rgba(47,165,169,0.35)",
+  },
+  qPillText: { fontWeight: "900", fontSize: 12, color: "#111" },
+  qPillTextOn: { color: COLORS.light.primary },
 
   sheetBtns: { flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
   btn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: "center", justifyContent: "center" },

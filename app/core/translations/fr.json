@@ -590,50 +590,146 @@
 
   "jeunesse": {
     "title": "Jeunesse",
-    "childrenAndYouth": "Activités Enfants & Jeunes",
-    "amisDeJesus": "Amis de Jésus (Église du Christianisme Céleste)",
-    "registerChild": "Inscrire un enfant",
-    "checkResults": "Consulter les résultats du concours",
+    "childrenAndYouth": "Enfants & Jeunes",
+    "amisDeJesus": "Amis de Jésus",
+    "enterIdentifier": "Entrez l’identifiant (ex : JXXXX)",
     "identifier": "Identifiant",
-    "enterIdentifier": "Saisir l’identifiant",
-    "search": "Rechercher",
-    "results": "Résultats",
-    "noResults": "Aucun résultat trouvé.",
-    "openPhases": "Phases du concours",
-    "preselection": "Concours préliminaires",
-    "selection": "Sélection",
-    "final": "Phase Finale Seme 2024",
-    "shortlisted": "Liste des candidats retenus",
-    "viewList": "Voir la liste",
-    "close": "Fermer",
 
-    "firstName": "Prénom",
-    "lastName": "Nom",
-    "age": "Âge",
-    "currentClass": "Classe actuelle",
-    "academicYear": "Année académique",
-    "parishName": "Nom de la paroisse",
-    "shepherdNames": "Nom(s) du berger",
-    "teacherNames": "Nom(s) du professeur principal",
-    "shepherdPhone": "Téléphone du berger",
-    "teacherPhone": "Téléphone du professeur",
-    "email": "Email principal",
-    "country": "Pays",
-    "province": "Province",
-    "city": "Ville",
-    "region": "Région",
-    "subRegion": "Sous-région",
-    "submit": "Valider",
+    "results": "Résultats",
+    "noResults": "Aucun résultat trouvé",
     "saved": "Enregistré",
     "saveFailed": "Échec de l’enregistrement",
+    "submitQuiz": "Soumettre le quiz",
 
-    "weeklyQuiz": "Quiz de la semaine",
-    "startQuiz": "Démarrer le quiz",
-    "timeLeft": "Temps restant : {{sec}}s",
-    "submitQuiz": "Soumettre",
-    "score": "Score : {{score}}/{{total}}",
-    "alreadyPlayed": "Vous avez déjà joué ce quiz.",
-    "quizNotAvailable": "Quiz indisponible."
+    "weeklyQuiz": "Quiz hebdomadaire",
+    "quizNotAvailable": "Aucun quiz disponible",
+    "alreadyPlayed": "Vous avez déjà participé à ce quiz",
+
+    "ui": {
+      "tabs": {
+        "home": "Accueil",
+        "results": "Résultats",
+        "quiz": "Quiz",
+        "register": "Inscription",
+        "history": "Historique"
+      },
+
+      "home": {
+        "title": "Calendrier du concours",
+        "badgeYear": "Année {{year}}",
+        "subtitle": "Consultez les dates et périodes de chaque phase. Appuyez sur « Candidats » pour voir la liste (si disponible).",
+        "candidatesCount": "Candidats : {{count}}",
+        "quickActionsTitle": "Actions rapides",
+        "quickActionsSub": "Rechercher les résultats, participer au quiz ou inscrire un enfant.",
+        "searchResults": "Rechercher les résultats",
+        "openQuiz": "Ouvrir le quiz",
+        "register": "Inscrire"
+      },
+
+      "results": {
+        "title": "Recherche de résultats",
+        "subtitle": "Entrez votre identifiant en haut puis lancez la recherche. Vous pouvez aussi changer l’année en haut à droite.",
+        "checking": "Vérification…",
+        "search": "Rechercher",
+        "emptyTitle": "Aucun résultat pour le moment",
+        "emptySub": "Lorsque l’admin vous fait passer au concours suivant, votre résultat apparaîtra ici.",
+        "pastYearsTitle": "Années précédentes",
+        "pastYearsSub": "Utilisez le sélecteur d’année en haut pour consulter les résultats des années passées.",
+        "avg": "Moy"
+      },
+
+      "quiz": {
+        "title": "Quiz hebdomadaire",
+        "loading": "Chargement du quiz…",
+        "emptyTitle": "Aucun quiz disponible",
+        "emptySub": "Réessayez plus tard.",
+        "questionsInfo": "{{count}} question(s) · {{sec}}s",
+        "start": "Commencer le quiz",
+        "viewHistory": "Voir l’historique des scores",
+        "importantTitle": "Important",
+        "importantSub": "Votre identifiant est obligatoire pour participer (afin de retrouver vos scores et résultats)."
+      },
+
+      "register": {
+        "title": "Inscription des enfants",
+        "badgeNew": "Nouveau",
+        "subtitle": "Après l’enregistrement, vous recevrez un identifiant. Gardez-le pour consulter vos résultats et participer aux quiz.",
+        "submit": "Soumettre l’inscription",
+        "requiredFields": "Veuillez remplir tous les champs obligatoires."
+      },
+
+      "history": {
+        "title": "Historique des scores (quiz)",
+        "refresh": "Actualiser",
+        "subtitle": "Les scores sont liés à votre identifiant.",
+        "loading": "Chargement…",
+        "emptyTitle": "Aucune participation",
+        "emptySub": "Participez à un quiz pour voir votre historique ici.",
+        "tipTitle": "Astuce",
+        "tipSub": "Même si vous changez de téléphone, votre identifiant fonctionne toujours—il suffit de le saisir à nouveau.",
+        "scoreLabel": "Score : {{score}}/{{total}}",
+        "modeAuto": "Auto",
+        "modeManual": "Manuel"
+      },
+
+      "picker": {
+        "selectYear": "Choisir l’année",
+        "sub": "Voir les dates du concours et les résultats pour une année précise"
+      },
+
+      "candidatesModal": {
+        "sub": "Liste des candidats (si l’admin l’a définie)",
+        "candidatesTitle": "Candidats",
+        "noCandidates": "Aucun candidat n’a été défini pour cette phase."
+      },
+
+      "quizModal": {
+        "timeLeft": "Temps restant : {{sec}}s",
+        "noQuestion": "Aucune question.",
+        "prev": "Précédent",
+        "next": "Suivant",
+        "submit": "Soumettre"
+      },
+
+      "alerts": {
+        "enterIdentifierTitle": "Résultats",
+        "enterIdentifierMsg": "Entrez votre identifiant",
+        "historyTitle": "Historique",
+        "historyEnterId": "Saisissez d’abord votre identifiant.",
+        "quizTitle": "Quiz"
+      },
+
+      "fields": {
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "age": "Âge",
+        "class": "Classe",
+        "academicYear": "Année scolaire (ex : 2025-2026)",
+        "parishName": "Nom de la paroisse",
+        "parishShepherdNames": "Noms du berger de la paroisse",
+        "mainTeacherNames": "Noms de l’enseignant principal",
+        "shepherdPhone": "Téléphone du berger",
+        "teacherPhone": "Téléphone de l’enseignant",
+        "email": "Email",
+        "country": "Pays",
+        "province": "Province",
+        "city": "Ville",
+        "region": "Région",
+        "subRegion": "Sous-région"
+      },
+
+      "phases": {
+        "prelim": "Préliminaire",
+        "preselection": "Présélection",
+        "selection": "Sélection",
+        "final": "Finale"
+      },
+
+      "misc": {
+        "loading": "Chargement…",
+        "idLabel": "ID"
+      }
+    }
   },
   "adminJeunesse": {
     "title": "Admin Jeunesse",

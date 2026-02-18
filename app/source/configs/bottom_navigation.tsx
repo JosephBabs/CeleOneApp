@@ -103,7 +103,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({
 
         const icons: Record<TabRouteName, string> = {
           Home: "home-outline",
-          Jeunesse: "film-outline",
+          Jeunesse: "leaf-outline",
           Documents: "document-text-outline",
           Messages: "chatbubbles-outline",
           Cantiques: "musical-notes-outline",

@@ -92,48 +92,146 @@
 
   "jeunesse": {
     "title": "Juventud",
-    "childrenAndYouth": "Actividades para Niños y Jóvenes",
-    "amisDeJesus": "Amis de Jésus (Iglesia Celestial)",
-    "registerChild": "Registrar un niño",
-    "checkResults": "Ver resultados del concurso",
+    "childrenAndYouth": "Niños y Jóvenes",
+    "amisDeJesus": "Amis de Jésus",
+    "enterIdentifier": "Ingrese el identificador (ej.: JXXXX)",
     "identifier": "Identificador",
-    "enterIdentifier": "Ingresar identificador",
-    "search": "Buscar",
+
     "results": "Resultados",
-    "noResults": "No se encontraron resultados.",
-    "openPhases": "Fases del concurso",
-    "preselection": "Preselección",
-    "selection": "Selección",
-    "final": "Fase Final (Seme 2024)",
-    "shortlisted": "Lista de seleccionados",
-    "viewList": "Ver lista",
-    "close": "Cerrar",
-    "firstName": "Nombre",
-    "lastName": "Apellido",
-    "age": "Edad",
-    "currentClass": "Clase actual",
-    "academicYear": "Año académico",
-    "parishName": "Parroquia",
-    "shepherdNames": "Nombre(s) del pastor",
-    "teacherNames": "Nombre(s) del profesor principal",
-    "shepherdPhone": "Teléfono del pastor",
-    "teacherPhone": "Teléfono del profesor",
-    "email": "Correo principal",
-    "country": "País",
-    "province": "Provincia",
-    "city": "Ciudad",
-    "region": "Región",
-    "subRegion": "Sub-región",
-    "submit": "Enviar",
+    "noResults": "No se encontraron resultados",
     "saved": "Guardado",
     "saveFailed": "Error al guardar",
+    "submitQuiz": "Enviar quiz",
+
     "weeklyQuiz": "Quiz semanal",
-    "startQuiz": "Iniciar quiz",
-    "timeLeft": "Tiempo: {{sec}}s",
-    "submitQuiz": "Enviar",
-    "score": "Puntaje: {{score}}/{{total}}",
-    "alreadyPlayed": "Ya jugaste este quiz.",
-    "quizNotAvailable": "Quiz no disponible."
+    "quizNotAvailable": "No hay quiz disponible",
+    "alreadyPlayed": "Ya participaste en este quiz",
+
+    "ui": {
+      "tabs": {
+        "home": "Inicio",
+        "results": "Resultados",
+        "quiz": "Quiz",
+        "register": "Registro",
+        "history": "Historial"
+      },
+
+      "home": {
+        "title": "Calendario del concurso",
+        "badgeYear": "Año {{year}}",
+        "subtitle": "Ver fechas y periodos de cada fase. Toque “Candidatos” para ver la lista (si está disponible).",
+        "candidatesCount": "Candidatos: {{count}}",
+        "quickActionsTitle": "Acciones rápidas",
+        "quickActionsSub": "Buscar resultados, hacer el quiz o registrar a un niño.",
+        "searchResults": "Buscar resultados",
+        "openQuiz": "Abrir quiz",
+        "register": "Registrar"
+      },
+
+      "results": {
+        "title": "Búsqueda de resultados",
+        "subtitle": "Ingrese su identificador en la parte superior y busque. También puede cambiar el año arriba a la derecha.",
+        "checking": "Verificando…",
+        "search": "Buscar",
+        "emptyTitle": "Aún no hay resultados",
+        "emptySub": "Si el administrador te pasa al siguiente concurso, tu resultado aparecerá aquí.",
+        "pastYearsTitle": "Años anteriores",
+        "pastYearsSub": "Use el selector de año en la parte superior para ver los resultados de años anteriores.",
+        "avg": "Prom"
+      },
+
+      "quiz": {
+        "title": "Quiz semanal",
+        "loading": "Cargando quiz…",
+        "emptyTitle": "No hay quiz disponible",
+        "emptySub": "Inténtalo más tarde.",
+        "questionsInfo": "{{count}} pregunta(s) · {{sec}}s",
+        "start": "Iniciar quiz",
+        "viewHistory": "Ver historial de puntuaciones",
+        "importantTitle": "Importante",
+        "importantSub": "Tu identificador es obligatorio para participar (para poder encontrar tus resultados y puntuaciones)."
+      },
+
+      "register": {
+        "title": "Registro de niños",
+        "badgeNew": "Nuevo",
+        "subtitle": "Después de guardar, recibirás un identificador. Guárdalo para consultar resultados y participar en quizzes.",
+        "submit": "Enviar registro",
+        "requiredFields": "Por favor complete todos los campos obligatorios."
+      },
+
+      "history": {
+        "title": "Historial de puntuación (quiz)",
+        "refresh": "Actualizar",
+        "subtitle": "Las puntuaciones están vinculadas a tu identificador.",
+        "loading": "Cargando…",
+        "emptyTitle": "Aún no hay intentos",
+        "emptySub": "Realiza un quiz para ver tu historial aquí.",
+        "tipTitle": "Consejo",
+        "tipSub": "Si cambias de teléfono, tu identificador seguirá funcionando—solo introdúcelo de nuevo.",
+        "scoreLabel": "Puntuación: {{score}}/{{total}}",
+        "modeAuto": "Auto",
+        "modeManual": "Manual"
+      },
+
+      "picker": {
+        "selectYear": "Seleccionar año",
+        "sub": "Ver fechas del concurso y resultados para un año específico"
+      },
+
+      "candidatesModal": {
+        "sub": "Lista de candidatos (si el admin la configuró)",
+        "candidatesTitle": "Candidatos",
+        "noCandidates": "Aún no hay candidatos definidos para esta fase."
+      },
+
+      "quizModal": {
+        "timeLeft": "Tiempo restante: {{sec}}s",
+        "noQuestion": "No hay pregunta.",
+        "prev": "Anterior",
+        "next": "Siguiente",
+        "submit": "Enviar"
+      },
+
+      "alerts": {
+        "enterIdentifierTitle": "Resultados",
+        "enterIdentifierMsg": "Ingrese su identificador",
+        "historyTitle": "Historial",
+        "historyEnterId": "Primero ingrese su identificador.",
+        "quizTitle": "Quiz"
+      },
+
+      "fields": {
+        "firstName": "Nombre",
+        "lastName": "Apellido",
+        "age": "Edad",
+        "class": "Clase",
+        "academicYear": "Año académico (ej.: 2025-2026)",
+        "parishName": "Nombre de la parroquia",
+        "parishShepherdNames": "Nombres del pastor de la parroquia",
+        "mainTeacherNames": "Nombres del profesor principal",
+        "shepherdPhone": "Teléfono del pastor",
+        "teacherPhone": "Teléfono del profesor",
+        "email": "Correo electrónico",
+        "country": "País",
+        "province": "Provincia",
+        "city": "Ciudad",
+        "region": "Región",
+        "subRegion": "Subregión"
+      },
+
+      "phases": {
+        "prelim": "Preliminar",
+        "preselection": "Preselección",
+        "selection": "Selección",
+        "final": "Final"
+      },
+
+      "misc": {
+        "loading": "Cargando…",
+        "idLabel": "ID"
+      }
+    }
   },
   "adminJeunesse": {
     "title": "Admin Juventud",

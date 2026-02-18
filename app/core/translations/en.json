@@ -71,53 +71,148 @@
     "Messages": "Messages",
     "Cantiques": "Hymns"
   },
-  
   "jeunesse": {
     "title": "Youth",
-    "childrenAndYouth": "Children & Youth Activities",
-    "amisDeJesus": "Amis de Jésus (Celestial Church)",
-    "registerChild": "Register a child",
-    "checkResults": "Check concours results",
+    "childrenAndYouth": "Children & Youth",
+    "amisDeJesus": "Amis de Jésus",
+    "enterIdentifier": "Enter identifier (e.g. JXXXX)",
     "identifier": "Identifier",
-    "enterIdentifier": "Enter identifier",
-    "search": "Search",
-    "results": "Results",
-    "noResults": "No results found.",
-    "openPhases": "Concours phases",
-    "preselection": "Preselection",
-    "selection": "Selection",
-    "final": "Final Phase (Seme 2024)",
-    "shortlisted": "Shortlisted candidates",
-    "viewList": "View list",
-    "close": "Close",
 
-    "firstName": "First name",
-    "lastName": "Last name",
-    "age": "Age",
-    "currentClass": "Current class",
-    "academicYear": "Academic year",
-    "parishName": "Parish name",
-    "shepherdNames": "Parish shepherd name(s)",
-    "teacherNames": "Main teacher name(s)",
-    "shepherdPhone": "Shepherd phone",
-    "teacherPhone": "Teacher phone",
-    "email": "Main contact email",
-    "country": "Country",
-    "province": "Province",
-    "city": "City",
-    "region": "Region",
-    "subRegion": "Sub-region",
-    "submit": "Submit",
+    "results": "Results",
+    "noResults": "No results found",
     "saved": "Saved",
     "saveFailed": "Save failed",
+    "submitQuiz": "Submit quiz",
 
     "weeklyQuiz": "Weekly quiz",
-    "startQuiz": "Start quiz",
-    "timeLeft": "Time left: {{sec}}s",
-    "submitQuiz": "Submit",
-    "score": "Score: {{score}}/{{total}}",
-    "alreadyPlayed": "You already played this quiz.",
-    "quizNotAvailable": "Quiz not available."
+    "quizNotAvailable": "No quiz available",
+    "alreadyPlayed": "You already participated in this quiz",
+
+    "ui": {
+      "tabs": {
+        "home": "Home",
+        "results": "Results",
+        "quiz": "Quiz",
+        "register": "Register",
+        "history": "History"
+      },
+
+      "home": {
+        "title": "Concours schedule",
+        "badgeYear": "Year {{year}}",
+        "subtitle": "View dates and time windows for each phase. Tap “Candidates” to see who is selected (if available).",
+        "candidatesCount": "Candidates: {{count}}",
+        "quickActionsTitle": "Quick actions",
+        "quickActionsSub": "Search results, take the quiz, or register a child.",
+        "searchResults": "Search results",
+        "openQuiz": "Open quiz",
+        "register": "Register"
+      },
+
+      "results": {
+        "title": "Result search",
+        "subtitle": "Enter your identifier in the header and search. You can also change the year from the top-right.",
+        "checking": "Checking…",
+        "search": "Search",
+        "emptyTitle": "No results yet",
+        "emptySub": "If admin moves you to the next concours, your result appears here.",
+        "pastYearsTitle": "Past years",
+        "pastYearsSub": "Use the year picker in the header to view past year concours results.",
+        "avg": "Avg"
+      },
+
+      "quiz": {
+        "title": "Weekly quiz",
+        "loading": "Loading quiz…",
+        "emptyTitle": "No quiz available",
+        "emptySub": "Check again later.",
+        "questionsInfo": "{{count}} question(s) · {{sec}}s",
+        "start": "Start quiz",
+        "viewHistory": "View score history",
+        "importantTitle": "Important",
+        "importantSub": "Your identifier is required to participate (so your scores and results can be found later)."
+      },
+
+      "register": {
+        "title": "Children registration",
+        "badgeNew": "New",
+        "subtitle": "After saving, you will receive an identifier. Keep it safe to check results and take quizzes.",
+        "submit": "Submit registration",
+        "requiredFields": "Please fill all required fields."
+      },
+
+      "history": {
+        "title": "Quiz score history",
+        "refresh": "Refresh",
+        "subtitle": "Scores are linked to your identifier.",
+        "loading": "Loading…",
+        "emptyTitle": "No attempts yet",
+        "emptySub": "Take a quiz to see your score history here.",
+        "tipTitle": "Tip",
+        "tipSub": "If you change phones, your identifier still works—just enter it again.",
+        "scoreLabel": "Score: {{score}}/{{total}}",
+        "modeAuto": "Auto",
+        "modeManual": "Manual"
+      },
+
+      "picker": {
+        "selectYear": "Select year",
+        "sub": "View concours dates & results for a specific year"
+      },
+
+      "candidatesModal": {
+        "sub": "List of candidates (if admin set them)",
+        "candidatesTitle": "Candidates",
+        "noCandidates": "No candidates set for this phase yet."
+      },
+
+      "quizModal": {
+        "timeLeft": "Time left: {{sec}}s",
+        "noQuestion": "No question.",
+        "prev": "Prev",
+        "next": "Next",
+        "submit": "Submit"
+      },
+
+      "alerts": {
+        "enterIdentifierTitle": "Results",
+        "enterIdentifierMsg": "Enter your identifier",
+        "historyTitle": "History",
+        "historyEnterId": "Enter your identifier first.",
+        "quizTitle": "Quiz"
+      },
+
+      "fields": {
+        "firstName": "First name",
+        "lastName": "Last name",
+        "age": "Age",
+        "class": "Class",
+        "academicYear": "Academic year (e.g. 2025-2026)",
+        "parishName": "Parish name",
+        "parishShepherdNames": "Parish shepherd names",
+        "mainTeacherNames": "Main teacher names",
+        "shepherdPhone": "Shepherd phone",
+        "teacherPhone": "Teacher phone",
+        "email": "Email",
+        "country": "Country",
+        "province": "Province",
+        "city": "City",
+        "region": "Region",
+        "subRegion": "Sub region"
+      },
+
+      "phases": {
+        "prelim": "Preliminary",
+        "preselection": "Preselection",
+        "selection": "Selection",
+        "final": "Final"
+      },
+
+      "misc": {
+        "loading": "Loading…",
+        "idLabel": "ID"
+      }
+    }
   },
   "adminJeunesse": {
     "title": "Admin Jeunesse",
