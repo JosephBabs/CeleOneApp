@@ -1,27 +1,24 @@
 /* eslint-disable react/no-unstable-nested-components */
-// Home.tsx — Premium redesign (same logic/structure, better UI)
-// ✅ Keeps: tabs, search, tags, list rendering per category, likes, refresh, floating action
-// ✅ Adds: premium header + quick chips, better tag badges, premium post cards, consistent spacing, empty state, better media overlays
-// ✅ No animated gradient (as requested)
-//
-// NOTE: This file replaces your UI layer but preserves your data/logic.
-// Keep your existing ./styles import? -> I intentionally DO NOT use your old styles to avoid conflicts.
-// If you MUST keep './styles', tell me and I will adapt it to the new style tokens.
+// Home.tsx — White hero + safe collapse (no animated height) + search expands more
+// ✅ Keeps your current colors (HERO_BG #fff, icon gray, primary pills)
+// ✅ Fix: search mode uses a bigger hero height so search + tags are fully visible
+// ✅ Menu/tabs never disappear on scroll
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
   Image,
   TouchableOpacity,
   TextInput,
-  FlatList,
   ScrollView,
   RefreshControl,
   Alert,
   ActivityIndicator,
   Platform,
   StyleSheet,
+  StatusBar,
+  Animated,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
@@ -42,6 +39,18 @@ import {
   getDocs,
 } from "firebase/firestore";
 
+const HERO_BG = "#fff";
+const HERO_TEXT = "rgba(6, 51, 37, 0.91)";
+const HERO_ICON_BG = "rgba(219, 219, 219, 0.55)";
+const HERO_RADIUS = 24;
+
+// Hero sizing (base)
+const HERO_EXPANDED = Platform.select({ ios: 285, android: 200 }) as number;
+const HERO_COLLAPSED = Platform.select({ ios: 120, android: 125 }) as number;
+
+// When search is active, make hero taller so search + tags can be visible
+const HERO_SEARCH_EXPANDED = Platform.select({ ios: 380, android: 330 }) as number;
+
 const Home = ({ navigation }: any) => {
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
@@ -56,8 +65,55 @@ const Home = ({ navigation }: any) => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Hero controls
+  const [forceHeroOpen, setForceHeroOpen] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false);
+  const searchRef = useRef<TextInput>(null);
+
   const isAdmin = auth.currentUser?.email === "bajos3d@gmail.com";
 
+  // ---- Animated collapse without animating height ----
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // collapse distance depends on current expanded height (search vs normal)
+  const expandedHeight = showSearchBar ? HERO_SEARCH_EXPANDED : HERO_EXPANDED;
+  const collapseDist = expandedHeight - HERO_COLLAPSED;
+
+  // 0..collapseDist (no negative)
+  const clamped = Animated.diffClamp(scrollY, 0, collapseDist);
+
+  // When forced open/search open => collapse = 0
+  const collapse = useMemo(() => {
+    if (forceHeroOpen || showSearchBar) return new Animated.Value(0);
+    return clamped;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceHeroOpen, showSearchBar, collapseDist]);
+
+  // Move the "expandable content" up as we scroll
+  const expandableTranslateY = Animated.multiply(collapse, -1);
+
+  // Fade out extra content on collapse
+  const expandableOpacity = collapse.interpolate({
+    inputRange: [0, collapseDist * 0.6, collapseDist],
+    outputRange: [1, 0.2, 0],
+    extrapolate: "clamp",
+  });
+
+  // For compact mode (icons only tabs)
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const sub = scrollY.addListener(({ value }) => {
+      if (forceHeroOpen || showSearchBar) {
+        if (compact) setCompact(false);
+        return;
+      }
+      const should = value > 70;
+      if (should !== compact) setCompact(should);
+    });
+    return () => scrollY.removeListener(sub);
+  }, [scrollY, compact, forceHeroOpen, showSearchBar]);
+
+  // ---------- Helpers ----------
   const getEmptyIcon = (category: string) => {
     switch (category) {
       case "news":
@@ -178,7 +234,7 @@ const Home = ({ navigation }: any) => {
     }
   };
 
-  // Search/Tags logic (kept)
+  // Search/Tags logic
   const availableCategories = useMemo(() => [...new Set(posts.map((p) => p.category))], [posts]);
 
   const toggleTag = (tag: string) => {
@@ -198,14 +254,14 @@ const Home = ({ navigation }: any) => {
     setSearchText("");
     setSelectedTags([]);
     setIsSearching(false);
+    setShowSearchBar(false);
+    setForceHeroOpen(false);
   };
 
   const getFilteredPosts = () => {
     let filtered = posts;
 
-    if (activeTab !== "all") {
-      filtered = filtered.filter((p) => p.category === activeTab);
-    }
+    if (activeTab !== "all") filtered = filtered.filter((p) => p.category === activeTab);
 
     if (searchText.trim()) {
       const searchLower = searchText.toLowerCase();
@@ -229,16 +285,14 @@ const Home = ({ navigation }: any) => {
       });
     }
 
-    if (selectedTags.length > 0) {
-      filtered = filtered.filter((post) => selectedTags.includes(post.category));
-    }
+    if (selectedTags.length > 0) filtered = filtered.filter((post) => selectedTags.includes(post.category));
 
     return filtered;
   };
 
   const filteredPosts = useMemo(getFilteredPosts, [posts, activeTab, searchText, selectedTags]);
 
-  // Like logic (kept)
+  // Like logic
   const handleLike = async (post: any) => {
     const currentUserEmail = auth.currentUser?.email;
     if (!currentUserEmail) {
@@ -268,40 +322,29 @@ const Home = ({ navigation }: any) => {
     }
   };
 
-  const formatCategoryLabel = (cat: string) => {
-    // If you already have translations for category labels, map here.
-    // fallback: capitalize
-    return (cat || "")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  };
+  const formatCategoryLabel = (cat: string) =>
+    (cat || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+  // Media (kept)
   const renderPostImages = (images: any[]) => {
     if (!images || images.length === 0) return null;
-
-    if (images.length === 1) {
-      return <Image source={images[0]} style={ui.singleImage} />;
-    }
-    if (images.length === 2) {
+    if (images.length === 1) return <Image source={images[0]} style={ui.singleImage} />;
+    if (images.length === 2)
       return (
         <View style={ui.twoImagesContainer}>
           <Image source={images[0]} style={ui.twoImage} />
           <Image source={images[1]} style={ui.twoImage} />
         </View>
       );
-    }
-    if (images.length > 2) {
-      return (
-        <View style={ui.gridContainer}>
-          <Image source={images[0]} style={ui.gridImage} />
-          <Image source={images[1]} style={ui.gridImage} />
-          <View style={ui.moreOverlay}>
-            <Text style={ui.moreText}>+{images.length - 2}</Text>
-          </View>
+    return (
+      <View style={ui.gridContainer}>
+        <Image source={images[0]} style={ui.gridImage} />
+        <Image source={images[1]} style={ui.gridImage} />
+        <View style={ui.moreOverlay}>
+          <Text style={ui.moreText}>+{images.length - 2}</Text>
         </View>
-      );
-    }
-    return null;
+      </View>
+    );
   };
 
   const renderPostMedia = (post: any) => {
@@ -326,7 +369,6 @@ const Home = ({ navigation }: any) => {
       );
     }
 
-    // Audio placeholder card (keep your player in PostDetail if you prefer)
     if (post.audio) {
       return (
         <TouchableOpacity
@@ -370,19 +412,14 @@ const Home = ({ navigation }: any) => {
         );
       }
     }
-
     return null;
   };
 
-  // ---------- Premium cards by category (same content, premium UI) ----------
-
+  // ---------- Cards (kept) ----------
   const HeaderMeta = ({ post }: any) => (
     <View style={ui.postHeader}>
       <View style={ui.postHeaderLeft}>
-        <Image
-          source={post.user?.profileImage || d_assets.images.appLogo}
-          style={ui.avatar}
-        />
+        <Image source={post.user?.profileImage || d_assets.images.appLogo} style={ui.avatar} />
         <View style={{ flex: 1 }}>
           <Text style={ui.username} numberOfLines={1}>
             {post.author || "Unknown User"}
@@ -414,27 +451,18 @@ const Home = ({ navigation }: any) => {
           <Text style={ui.actionText}>{post.likes || 0}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={ui.actionBtn}
-          onPress={() => navigation.navigate("PostDetail", { post })}
-        >
+        <TouchableOpacity style={ui.actionBtn} onPress={() => navigation.navigate("PostDetail", { post })}>
           <Icon name="chatbubble-outline" size={20} color="#333" />
           <Text style={ui.actionText}>{commentCounts[post.id] || 0}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={ui.actionBtn}
-          onPress={() => navigation.navigate("PostDetail", { post })}
-        >
+        <TouchableOpacity style={ui.actionBtn} onPress={() => navigation.navigate("PostDetail", { post })}>
           <Icon name="share-social-outline" size={20} color="#333" />
           <Text style={ui.actionText}>{post.shares || 0}</Text>
         </TouchableOpacity>
 
         <View style={{ flex: 1 }} />
-        <TouchableOpacity
-          style={ui.readBtn}
-          onPress={() => navigation.navigate("PostDetail", { post })}
-        >
+        <TouchableOpacity style={ui.readBtn} onPress={() => navigation.navigate("PostDetail", { post })}>
           <Text style={ui.readBtnText}>{t("home.seeMore")}</Text>
           <Icon name="chevron-forward" size={16} color="#111" />
         </TouchableOpacity>
@@ -476,31 +504,14 @@ const Home = ({ navigation }: any) => {
 
   const renderReformPost = (post: any) => {
     const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              font-size: 14px;
-              line-height: 1.45;
-              color: #1a1a1a;
-              margin: 0;
-              padding: 10px;
-              background: #fff7e6;
-            }
-            p { margin: 8px 0; }
-            h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px 0; }
-            blockquote { padding-left: 10px; margin: 10px 0; font-style: italic; color: #555; }
-          </style>
-        </head>
-        <body>
-          ${post.content || ""}
-        </body>
-      </html>
+      <!DOCTYPE html><html><head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.45;color:#1a1a1a;margin:0;padding:10px;background:#fff7e6}
+        p{margin:8px 0} h3{font-size:16px;font-weight:700;margin:12px 0 6px 0}
+        blockquote{padding-left:10px;margin:10px 0;font-style:italic;color:#555}
+      </style></head><body>${post.content || ""}</body></html>
     `;
-
     return (
       <View style={[ui.card, ui.cardAmberTint]}>
         <HeaderMeta post={post} />
@@ -523,7 +534,7 @@ const Home = ({ navigation }: any) => {
         </View>
 
         <Text style={ui.miniMeta}>
-          {t("home.updatedBy")}: {post.posterName || post.updatedBy || "—"}  •  {t("home.updatedOn")}:{" "}
+          {t("home.updatedBy")}: {post.posterName || post.updatedBy || "—"} • {t("home.updatedOn")}:{" "}
           {post.updatedOn || post.date || "—"}
         </Text>
 
@@ -534,31 +545,14 @@ const Home = ({ navigation }: any) => {
 
   const renderDecisionPost = (post: any) => {
     const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              font-size: 14px;
-              line-height: 1.45;
-              color: #1a1a1a;
-              margin: 0;
-              padding: 10px;
-              background: #b8e7d8;
-            }
-            p { margin: 8px 0; }
-            h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px 0; }
-            blockquote { border-left: 3px solid rgba(0,0,0,0.25); padding-left: 10px; margin: 10px 0; font-style: italic; color: #2d2d2d; }
-          </style>
-        </head>
-        <body>
-          ${post.content || ""}
-        </body>
-      </html>
+      <!DOCTYPE html><html><head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.45;color:#1a1a1a;margin:0;padding:10px;background:#b8e7d8}
+        p{margin:8px 0} h3{font-size:16px;font-weight:700;margin:12px 0 6px 0}
+        blockquote{border-left:3px solid rgba(0,0,0,0.25);padding-left:10px;margin:10px 0;font-style:italic;color:#2d2d2d}
+      </style></head><body>${post.content || ""}</body></html>
     `;
-
     return (
       <View style={[ui.card, ui.cardMintTint]}>
         <HeaderMeta post={post} />
@@ -649,14 +643,30 @@ const Home = ({ navigation }: any) => {
     { key: "events", label: t("home.tabs.events"), icon: "calendar-outline" },
   ];
 
+  // Hero actions
+  const toggleSearchDrop = () => {
+    const next = !showSearchBar;
+    setShowSearchBar(next);
+    setForceHeroOpen(next); // keeps open while searching
+    setIsSearching(next || isSearching);
+    if (next) setTimeout(() => searchRef.current?.focus(), 120);
+    else if (selectedTags.length === 0 && !searchText.trim()) setIsSearching(false);
+  };
+
+  const manualExpandHero = () => setForceHeroOpen(true);
+
+  // ---- Loading ----
   if (loading) {
     return (
       <View style={ui.page}>
-        <View style={ui.topBar}>
-          <Image source={d_assets.images.appLogo} style={ui.topLogo} />
-          <View style={{ flex: 1 }} />
-          <ActivityIndicator color={COLORS.light.primary} />
+        <View style={[hero.heroContainer, { height: HERO_COLLAPSED }]}>
+          <View style={hero.heroPinnedTop}>
+            <Image source={d_assets.images.appLogo} style={hero.heroIcon} />
+            <View style={{ flex: 1 }} />
+            <ActivityIndicator color={COLORS.light.primary} />
+          </View>
         </View>
+
         <View style={ui.loadingCenter}>
           <ActivityIndicator size="large" color={COLORS.light.primary} />
           <Text style={ui.loadingText}>{t("home.loading") || "Loading..."}</Text>
@@ -665,118 +675,222 @@ const Home = ({ navigation }: any) => {
     );
   }
 
-  return (
-    <View style={ui.page}>
-      {/* Premium Header */}
-      <View style={ui.topBar}>
-        <Image source={d_assets.images.appLogo} style={ui.topLogo} />
-
-        <View style={ui.headerTitleWrap}>
-          {/* <Text style={ui.headerHello}>{t("home.hello") || "Alleluia !"}</Text> */}
-          {/* <Text style={ui.headerTitle}>{t("home.title") || t("home.explore") || "Explore"}</Text> */}
+  // ---- UI pieces ----
+  const PinnedTopRow = () => (
+    <View style={hero.heroPinnedTop}>
+      <View style={hero.heroTopLeft}>
+        <View style={hero.heroIcon}>
+          <Image source={d_assets.images.appLogo} style={{ width: 26, height: 26, resizeMode: "contain" }} />
         </View>
-
-        <View style={ui.headerIcons}>
-          {isAdmin && (
-            <TouchableOpacity onPress={() => navigation.navigate("AdminDashboard")} style={ui.headerIconBtn}>
-              <Icon name="shield-checkmark" size={20} color="#111" />
-            </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={hero.heroTitle} numberOfLines={1}>
+            { "Cèlè One"}
+          </Text>
+          {!compact && (
+            <Text style={hero.heroSub} numberOfLines={1}>
+              {t("home.explore") || "Cèlè One"}
+            </Text>
           )}
-
-          <TouchableOpacity onPress={() => navigation.navigate("MediaStream")} style={ui.headerIconBtn}>
-            <Icon name="film-outline" size={20} color="#111" />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => navigation.navigate("Notifications")} style={ui.headerIconBtn}>
-            <Icon name="notifications-outline" size={20} color="#111" />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => navigation.navigate("Settings")} style={ui.headerIconBtn}>
-            <Icon name="settings-outline" size={20} color="#111" />
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Search */}
-      <View style={ui.searchWrap}>
-        <View style={ui.searchBar}>
-          <Icon name="search" size={18} color="#777" />
-          <TextInput
-            style={ui.searchInput}
-            placeholder={t("home.searchPlaceholder")}
-            placeholderTextColor="#888"
-            value={searchText}
-            onChangeText={setSearchText}
-            onFocus={handleSearchFocus}
-            onBlur={handleSearchBlur}
-          />
-          {(searchText.length > 0 || selectedTags.length > 0) && (
-            <TouchableOpacity onPress={clearSearch} style={ui.clearBtn}>
-              <Icon name="close" size={18} color="#777" />
-            </TouchableOpacity>
-          )}
+      <View style={hero.heroTopRight}>
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate("AdminDashboard")}
+            style={hero.heroIcon}
+            activeOpacity={0.9}
+          >
+            <Icon name="shield-checkmark" size={18} color={HERO_TEXT} />
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity onPress={() => navigation.navigate("MediaStream")} style={hero.heroIcon} activeOpacity={0.9}>
+          <Icon name="film-outline" size={18} color={HERO_TEXT} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Notifications")}
+          style={hero.heroIcon}
+          activeOpacity={0.9}
+        >
+          <Icon name="notifications-outline" size={18} color={HERO_TEXT} />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate("Settings")} style={hero.heroIcon} activeOpacity={0.9}>
+          <Icon name="settings-outline" size={18} color={HERO_TEXT} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const ExpandableArea = () => (
+    <Animated.View
+      style={[
+        hero.expandable,
+        {
+          transform: [{ translateY: expandableTranslateY }],
+          opacity: expandableOpacity,
+        },
+      ]}
+    >
+      <View style={hero.yearRow}>
+        <TouchableOpacity onPress={toggleSearchDrop} style={hero.heroIcon} activeOpacity={0.9}>
+          <Icon name={showSearchBar ? "close" : "search"} size={18} color={HERO_TEXT} />
+        </TouchableOpacity>
+
+        <View style={hero.yearPill}>
+          <Icon name="calendar-outline" size={16} color={HERO_TEXT} />
+          <Text style={hero.yearText}>{new Date().getFullYear()}</Text>
         </View>
 
-        {/* Selected tags chips */}
-        {selectedTags.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ui.selectedChips}>
-            {selectedTags.map((tag) => (
-              <View key={tag} style={ui.selectedChip}>
-                <Text style={ui.selectedChipText}>{formatCategoryLabel(tag)}</Text>
-                <TouchableOpacity onPress={() => removeTag(tag)} style={ui.selectedChipX}>
-                  <Icon name="close" size={14} color={COLORS.light.primary} />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        )}
+        <View style={{ flex: 1 }} />
 
-        {/* Tags filter visible when searching */}
-        {isSearching && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ui.tagsRow}>
-            {availableCategories.map((category) => {
-              const selected = selectedTags.includes(category);
-              return (
-                <TouchableOpacity
-                  key={category}
-                  onPress={() => toggleTag(category)}
-                  style={[ui.tagChip, selected && ui.tagChipSelected]}
-                >
-                  <Text style={[ui.tagChipText, selected && ui.tagChipTextSelected]}>
-                    {formatCategoryLabel(category)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("TvPlayerScreen")}
+          style={hero.quickPill}
+          activeOpacity={0.9}
+        >
+          <Icon name="play" size={16} color={HERO_TEXT} />
+          <Text style={hero.quickText}>TV</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate("RadioPlayerScreen")}
+          style={hero.quickPill}
+          activeOpacity={0.9}
+        >
+          <Icon name="radio" size={16} color={HERO_TEXT} />
+          <Text style={hero.quickText}>Radio</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={ui.tabsWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ui.tabsRow}>
-          {tabs.map((tab) => {
-            const active = activeTab === tab.key;
+      {showSearchBar && (
+        <>
+          <View style={hero.searchBar}>
+            <Icon name="search" size={16} color={HERO_TEXT} />
+            <TextInput
+              ref={searchRef}
+              style={hero.searchInput}
+              placeholder={`${t("home.searchPlaceholder") || "Search"}…`}
+              placeholderTextColor="rgba(6,51,37,0.55)"
+              value={searchText}
+              onChangeText={setSearchText}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
+            />
+            {(searchText.length > 0 || selectedTags.length > 0) && (
+              <TouchableOpacity onPress={clearSearch} style={hero.clearBtn} activeOpacity={0.9}>
+                <Icon name="close" size={18} color={HERO_TEXT} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {selectedTags.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={hero.selectedRow}>
+              {selectedTags.map((tag) => (
+                <View key={tag} style={hero.selectedChip}>
+                  <Text style={hero.selectedChipText}>{formatCategoryLabel(tag)}</Text>
+                  <TouchableOpacity onPress={() => removeTag(tag)} style={hero.selectedX} activeOpacity={0.9}>
+                    <Icon name="close" size={14} color={HERO_TEXT} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
+          {isSearching && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={hero.tagsRow}>
+              {availableCategories.map((category) => {
+                const selected = selectedTags.includes(category);
+                return (
+                  <TouchableOpacity
+                    key={category}
+                    onPress={() => toggleTag(category)}
+                    style={[hero.tagChip, selected && hero.tagChipSelected]}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={[hero.tagChipText, selected && hero.tagChipTextSelected]}>
+                      {formatCategoryLabel(category)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </>
+      )}
+    </Animated.View>
+  );
+
+  const Tabs = () => {
+    if (compact && !forceHeroOpen && !showSearchBar) {
+      return (
+        <View style={hero.compactTabs}>
+          {tabs.map((tb) => {
+            const active = activeTab === tb.key;
             return (
               <TouchableOpacity
-                key={tab.key}
-                onPress={() => setActiveTab(tab.key)}
-                style={[ui.tabPill, active && ui.tabPillActive]}
+                key={tb.key}
+                onPress={() => setActiveTab(tb.key)}
+                style={[hero.compactTabBtn, active && hero.compactTabBtnActive]}
+                activeOpacity={0.9}
               >
-                <Icon name={tab.icon as any} size={16} color={active ? "#fff" : "#333"} />
-                <Text style={[ui.tabText, active && ui.tabTextActive]}>{tab.label}</Text>
+                <Icon name={tb.icon as any} size={20} color={active ? "#fff" : "rgba(6,51,37,0.55)"} />
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={hero.pillsRow}>
+        {tabs.map((tb) => {
+          const active = activeTab === tb.key;
+          return (
+            <TouchableOpacity
+              key={tb.key}
+              onPress={() => setActiveTab(tb.key)}
+              style={[hero.pill, active && hero.pillActive]}
+              activeOpacity={0.9}
+            >
+              <Icon name={tb.icon as any} size={16} color={active ? "#fff" : "rgba(2, 39, 27, 0.9)"} />
+              <Text style={[hero.pillText, active && hero.pillTextActive]}>{tb.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
+  // Decide hero container height
+  const heroFixedHeight =
+    forceHeroOpen || showSearchBar ? expandedHeight : compact ? HERO_COLLAPSED : expandedHeight;
+
+  return (
+    <View style={ui.page}>
+      <StatusBar barStyle="dark-content" backgroundColor={HERO_BG} />
+
+      {/* HERO */}
+      <View style={[hero.heroContainer, { height: heroFixedHeight }]}>
+        <PinnedTopRow />
+        <View style={{ marginTop: 10 }}>
+          <Tabs />
+        </View>
+        <ExpandableArea />
       </View>
 
-      {/* Posts */}
-      <FlatList
+      {/* FEED */}
+      <Animated.FlatList
         data={filteredPosts}
         renderItem={renderPost}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 12, paddingBottom: 90 }}
+        contentContainerStyle={{
+          paddingTop: heroFixedHeight + 12,
+          paddingHorizontal: 12,
+          paddingBottom: 90,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -795,7 +909,17 @@ const Home = ({ navigation }: any) => {
             <Text style={ui.emptyText}>{getEmptyText(activeTab)}</Text>
           </View>
         }
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+          useNativeDriver: true,
+        })}
+        scrollEventThrottle={16}
       />
+
+      {!forceHeroOpen && !showSearchBar && compact && (
+        <TouchableOpacity onPress={manualExpandHero} style={hero.expandBtn} activeOpacity={0.9}>
+          <Icon name="chevron-down" size={18} color={HERO_TEXT} />
+        </TouchableOpacity>
+      )}
 
       {/* Floating Action */}
       <View style={{ flex: 1 }}>
@@ -814,88 +938,158 @@ const Home = ({ navigation }: any) => {
 
 export default Home;
 
-/* ---------------- PREMIUM UI STYLES ---------------- */
-
-const ui = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#fff" },
-
-  topBar: {
-    paddingTop: Platform.select({ ios: 52, android: 14 }),
+/* ---------------- HERO STYLES ---------------- */
+const hero = StyleSheet.create({
+  heroContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    backgroundColor: HERO_BG,
+    paddingTop: Platform.select({ ios: 54, android: 14 }),
     paddingHorizontal: 14,
-    paddingBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    paddingBottom: 14,
+    borderBottomLeftRadius: HERO_RADIUS,
+    borderBottomRightRadius: HERO_RADIUS,
+    overflow: "hidden",
+    elevation: 4,
+    zIndex: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F1F1",
-    backgroundColor: "#fff",
+    borderBottomColor: "rgba(0,0,0,0.06)",
   },
 
-  topLogo: { width: 44, height: 44, resizeMode: "contain", borderRadius: 14 },
-
-  headerTitleWrap: { flex: 1 },
-  headerHello: { fontSize: 12.5, color: "#666", fontWeight: "700" },
-  headerTitle: { fontSize: 18, color: "#111", fontWeight: "900", marginTop: 2 },
-
-  headerIcons: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: "#F6F6F6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  searchWrap: {
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: "#fff",
-  },
-
-  searchBar: {
+  heroPinnedTop: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#EFEFEF",
-    backgroundColor: "#FAFAFA",
-    paddingHorizontal: 12,
-    paddingVertical: Platform.select({ ios: 12, android: 10 }),
   },
 
-  searchInput: { flex: 1, color: "#111", fontWeight: "700" },
-  clearBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    backgroundColor: "#F1F1F1",
+  heroTopLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  heroTopRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+  heroIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: HERO_ICON_BG,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  selectedChips: { paddingTop: 10, paddingBottom: 2, gap: 8 },
-  selectedChip: {
+  heroTitle: { color: HERO_TEXT, fontSize: 20, fontWeight: "900" },
+  heroSub: { marginTop: 4, color: "rgba(6, 51, 37, 0.65)", fontWeight: "800", fontSize: 12.5 },
+
+  pillsRow: { gap: 10, paddingRight: 14 },
+  pill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderRadius: 999,
-    paddingVertical: 8,
+    backgroundColor: "rgba(110, 197, 129, 0.55)",
     paddingHorizontal: 12,
-    backgroundColor: "#F2FBFB",
-    borderWidth: 1,
-    borderColor: "rgba(47,165,169,0.22)",
-  },
-  selectedChipText: { fontSize: 12.5, fontWeight: "900", color: "#111" },
-  selectedChipX: {
-    width: 22,
-    height: 22,
+    paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#fff",
+  },
+  pillActive: {
+    backgroundColor: COLORS.light.primary,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  pillText: { fontWeight: "900", color: "rgba(2, 44, 31, 0.7)", fontSize: 12 },
+  pillTextActive: { color: "#fff" },
+
+  compactTabs: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    backgroundColor: "rgba(245,245,245,1)",
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    zIndex: 15,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  compactTabBtn: { flex: 1, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  compactTabBtnActive: { backgroundColor: COLORS.light.primary },
+
+  expandable: { marginTop: 12 },
+
+  yearRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+
+  yearPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(245,245,245,1)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  yearText: { fontWeight: "900", color: HERO_TEXT },
+
+  quickPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(245,245,245,1)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  quickText: { fontWeight: "900", color: HERO_TEXT },
+
+  searchBar: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(245,245,245,1)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  searchInput: { flex: 1, color: HERO_TEXT, fontWeight: "900" },
+  clearBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.9)",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+
+  selectedRow: { paddingTop: 10, gap: 10 },
+  selectedChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(245,245,245,1)",
+    borderRadius: 999,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  selectedChipText: { fontWeight: "900", color: HERO_TEXT },
+  selectedX: {
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
 
   tagsRow: { paddingTop: 10, gap: 8 },
@@ -903,39 +1097,40 @@ const ui = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "#F6F6F6",
+    backgroundColor: "rgba(245,245,245,1)",
     borderWidth: 1,
-    borderColor: "#EFEFEF",
+    borderColor: "rgba(0,0,0,0.06)",
   },
   tagChipSelected: {
     backgroundColor: COLORS.light.primary,
     borderColor: COLORS.light.primary,
   },
-  tagChipText: { fontSize: 12.5, fontWeight: "900", color: "#111" },
+  tagChipText: { fontSize: 12.5, fontWeight: "900", color: "rgba(6,51,37,0.75)" },
   tagChipTextSelected: { color: "#fff" },
 
-  tabsWrap: {
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F1F1",
-  },
-  tabsRow: { gap: 8 },
-  tabPill: {
-    flexDirection: "row",
+  expandBtn: {
+    position: "absolute",
+    right: 5,
+    top: Platform.select({ ios: 64, android: 110 }),
+    zIndex: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.96)",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "#EAE8C8",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    // elevation: 5,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  tabPillActive: {
-    backgroundColor: COLORS.light.primary,
-  },
-  tabText: { fontSize: 13, fontWeight: "900", color: "#111" },
-  tabTextActive: { color: "#fff" },
+});
+
+/* ---------------- YOUR PREMIUM UI STYLES (UNCHANGED) ---------------- */
+const ui = StyleSheet.create({
+  page: { flex: 1, backgroundColor: "#fff" },
 
   card: {
     backgroundColor: "#fff",
@@ -1008,9 +1203,7 @@ const ui = StyleSheet.create({
   },
   readBtnText: { fontSize: 12.5, fontWeight: "900", color: "#111" },
 
-  // Media
   singleImage: { width: "100%", height: 220, borderRadius: 16, backgroundColor: "#EDEDED" },
-
   twoImagesContainer: { flexDirection: "row", gap: 8 },
   twoImage: { flex: 1, height: 200, borderRadius: 16, backgroundColor: "#EDEDED" },
 
@@ -1103,6 +1296,18 @@ const ui = StyleSheet.create({
   },
 
   miniMeta: { marginTop: 10, fontSize: 11.5, color: "#444", fontWeight: "800" },
+
+  eventMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  eventMetaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  eventMetaText: { fontWeight: "800", color: "#111", fontSize: 12 },
 
   emptyWrap: {
     alignItems: "center",

@@ -1,14 +1,11 @@
+/* eslint-disable react-native/no-inline-styles */
 /* eslint-disable react/no-unstable-nested-components */
 /* Jeunesse.tsx — User side (Portal)
-   ✅ New design (WhatsApp teal header)
-   ✅ Menu tabs: Home (Concours dates), Results search (by identifier + year), Quiz participation, Registration
-   ✅ Quiz score history (by identifier)
-   ✅ View past year concours results (year picker)
-   ✅ Works with your latest admin-side structures:
-      - jeunesse_settings/global -> years[year].periods + years[year].concours[phase]...
-      - jeunesse_results -> docs created when admin moves passed candidates to next concours
-      - jeunesse_children -> registration
-      - jeunesse_quizzes + jeunesse_quiz_attempts
+   ✅ Hero redesigned to MATCH your Home screen style + scroll experience
+   ✅ NO animated height (so no "style property height is not supported")
+   ✅ Hero is FIXED (absolute) and FEED scrolls under it
+   ✅ Tabs + menu NEVER disappear (pinned top row)
+   ✅ Search/identifier area expands MORE when needed
 */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +23,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   Pressable,
+  StatusBar,
+  Animated,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
@@ -62,9 +61,6 @@ function genIdentifier() {
 }
 
 function parseQuiz(activeQuiz: any, t: any) {
-  // Supports BOTH:
-  // 1) admin single-question format: {question, options:{A..D}, correct:"A", durationSec}
-  // 2) multi-question format: {questions:[{id,text,options[],answerIndex}], durationSec}
   if (!activeQuiz) return { title: "", durationSec: 60, questions: [] as any[] };
 
   const durationSec = Number(activeQuiz.durationSec || 60);
@@ -101,6 +97,16 @@ function parseQuiz(activeQuiz: any, t: any) {
   };
 }
 
+/* ===================== HERO TOKENS (match Home screen style) ===================== */
+const HERO_BG = "#fff";
+const HERO_TEXT = "rgba(6, 51, 37, 0.91)";
+const HERO_ICON_BG = "rgba(219, 219, 219, 0.55)";
+const HERO_RADIUS = 24;
+
+const HERO_EXPANDED = Platform.select({ ios: 300, android: 150 }) as number;
+const HERO_COLLAPSED = Platform.select({ ios: 126, android: 130 }) as number;
+const HERO_SEARCH_EXPANDED = Platform.select({ ios: 390, android: 280 }) as number;
+
 export default function Jeunesse() {
   const { t } = useTranslation();
 
@@ -114,7 +120,7 @@ export default function Jeunesse() {
   const [year, setYear] = useState(currentYear);
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
 
-  // Identifier (used for results + quiz + history)
+  // Identifier
   const [identifier, setIdentifier] = useState("");
 
   // Results search
@@ -161,6 +167,14 @@ export default function Jeunesse() {
   const [listTitle, setListTitle] = useState("");
   const [listItems, setListItems] = useState<any[]>([]);
 
+  // Hero behavior (like Home)
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [compact, setCompact] = useState(false);
+  const [showIdBar, setShowIdBar] = useState(true); // collapsible area toggle
+  const [forceHeroOpen, setForceHeroOpen] = useState(false);
+
+  const idInputRef = useRef<TextInput>(null);
+
   // ---------- Load boot ----------
   useEffect(() => {
     (async () => {
@@ -183,13 +197,8 @@ export default function Jeunesse() {
   const loadActiveQuiz = async () => {
     setQuizLoading(true);
     try {
-      // Prefer isActive==true, else latest createdAt
       let snap = await getDocs(
-        query(
-          collection(db, "jeunesse_quizzes"),
-          orderBy("createdAt", "desc"),
-          limit(1)
-        )
+        query(collection(db, "jeunesse_quizzes"), orderBy("createdAt", "desc"), limit(1))
       );
 
       if (snap.empty) {
@@ -242,6 +251,39 @@ export default function Jeunesse() {
   }, [settings, year]);
 
   const phaseLabel = (p: Phase) => t(`jeunesse.ui.phases.${p}`) || p;
+
+  // ================== SCROLL EXPERIENCE (same as Home) ==================
+  const expandedHeight = showIdBar ? HERO_SEARCH_EXPANDED : HERO_EXPANDED;
+  const collapseDist = expandedHeight - HERO_COLLAPSED;
+  const clamped = Animated.diffClamp(scrollY, 0, collapseDist);
+
+  const collapse = useMemo(() => {
+    if (forceHeroOpen || showIdBar) return new Animated.Value(0);
+    return clamped;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceHeroOpen, showIdBar, collapseDist]);
+
+  const expandableTranslateY = Animated.multiply(collapse, -1);
+  const expandableOpacity = collapse.interpolate({
+    inputRange: [0, collapseDist * 0.6, collapseDist],
+    outputRange: [1, 0.2, 0],
+    extrapolate: "clamp",
+  });
+
+  useEffect(() => {
+    const sub = scrollY.addListener(({ value }) => {
+      if (forceHeroOpen || showIdBar) {
+        if (compact) setCompact(false);
+        return;
+      }
+      const should = value > 70;
+      if (should !== compact) setCompact(should);
+    });
+    return () => scrollY.removeListener(sub);
+  }, [scrollY, compact, forceHeroOpen, showIdBar]);
+
+  const heroFixedHeight =
+    forceHeroOpen || showIdBar ? expandedHeight : compact ? HERO_COLLAPSED : expandedHeight;
 
   // ---------- Results: search jeunesse_results by identifier + year ----------
   const checkResultsByIdentifier = async () => {
@@ -307,7 +349,9 @@ export default function Jeunesse() {
       const map = new Map(all.map((c) => [c.id, c]));
       const ordered = ids.map((id) => map.get(id)).filter(Boolean);
 
-      setListTitle(`${phaseLabel(phase)} · ${t("jeunesse.ui.candidatesModal.candidatesTitle") || "Candidates"} (${ids.length})`);
+      setListTitle(
+        `${phaseLabel(phase)} · ${t("jeunesse.ui.candidatesModal.candidatesTitle") || "Candidates"} (${ids.length})`
+      );
       setListItems(ordered);
       setListOpen(true);
     } catch (e: any) {
@@ -367,10 +411,7 @@ export default function Jeunesse() {
 
       await addDoc(collection(db, "jeunesse_children"), payload);
 
-      Alert.alert(
-        t("jeunesse.saved") || "Saved",
-        `${t("jeunesse.identifier") || "Identifier"}: ${idf}`
-      );
+      Alert.alert(t("jeunesse.saved") || "Saved", `${t("jeunesse.identifier") || "Identifier"}: ${idf}`);
 
       setIdentifier(idf);
       setReg({
@@ -392,6 +433,9 @@ export default function Jeunesse() {
         subRegion: "",
       });
       setTab("results");
+      setShowIdBar(true);
+      setForceHeroOpen(true);
+      setTimeout(() => idInputRef.current?.focus(), 250);
     } catch (e: any) {
       Alert.alert(t("jeunesse.saveFailed") || "Save failed", e?.message || "Error");
     } finally {
@@ -405,34 +449,24 @@ export default function Jeunesse() {
 
   const startQuiz = async () => {
     if (!activeQuiz || !questions.length) {
-      Alert.alert(
-        t("jeunesse.ui.alerts.quizTitle") || t("jeunesse.weeklyQuiz") || "Quiz",
-        t("jeunesse.quizNotAvailable") || "No quiz available"
-      );
+      Alert.alert(t("jeunesse.ui.alerts.quizTitle") || t("jeunesse.weeklyQuiz") || "Quiz", t("jeunesse.quizNotAvailable") || "No quiz available");
       return;
     }
 
     if (!identifier.trim()) {
-      Alert.alert(
-        t("jeunesse.identifier") || "Identifier",
-        t("jeunesse.enterIdentifier") || "Enter identifier first"
-      );
+      setShowIdBar(true);
+      setForceHeroOpen(true);
+      setTimeout(() => idInputRef.current?.focus(), 200);
+      Alert.alert(t("jeunesse.identifier") || "Identifier", t("jeunesse.enterIdentifier") || "Enter identifier first");
       return;
     }
 
     setQuizLoading(true);
     try {
-      const qy = query(
-        collection(db, "jeunesse_quiz_attempts"),
-        where("identifier", "==", identifier.trim()),
-        limit(1)
-      );
+      const qy = query(collection(db, "jeunesse_quiz_attempts"), where("identifier", "==", identifier.trim()), limit(1));
       const snap = await getDocs(qy);
       if (!snap.empty) {
-        Alert.alert(
-          t("jeunesse.ui.alerts.quizTitle") || t("jeunesse.weeklyQuiz") || "Quiz",
-          t("jeunesse.alreadyPlayed") || "Already played"
-        );
+        Alert.alert(t("jeunesse.ui.alerts.quizTitle") || t("jeunesse.weeklyQuiz") || "Quiz", t("jeunesse.alreadyPlayed") || "Already played");
         return;
       }
 
@@ -460,9 +494,7 @@ export default function Jeunesse() {
     }
   };
 
-  const chooseAnswer = (qid: string, index: number) => {
-    setQuizAnswers((prev) => ({ ...prev, [qid]: index }));
-  };
+  const chooseAnswer = (qid: string, index: number) => setQuizAnswers((prev) => ({ ...prev, [qid]: index }));
 
   const submitQuiz = async (auto = false) => {
     if (!activeQuiz) return;
@@ -492,8 +524,7 @@ export default function Jeunesse() {
 
       Alert.alert(
         t("jeunesse.ui.alerts.quizTitle") || t("jeunesse.weeklyQuiz") || "Quiz",
-        t("jeunesse.ui.history.scoreLabel", { score, total: questions.length }) ||
-          `Score: ${score}/${questions.length}`
+        t("jeunesse.ui.history.scoreLabel", { score, total: questions.length }) || `Score: ${score}/${questions.length}`
       );
 
       setQuizOpen(false);
@@ -513,19 +544,15 @@ export default function Jeunesse() {
   // ---------- Quiz history ----------
   const loadQuizHistory = async () => {
     if (!identifier.trim()) {
-      Alert.alert(
-        t("jeunesse.ui.alerts.historyTitle") || "History",
-        t("jeunesse.ui.alerts.historyEnterId") || "Enter your identifier first."
-      );
+      setShowIdBar(true);
+      setForceHeroOpen(true);
+      setTimeout(() => idInputRef.current?.focus(), 200);
+      Alert.alert(t("jeunesse.ui.alerts.historyTitle") || "History", t("jeunesse.ui.alerts.historyEnterId") || "Enter your identifier first.");
       return;
     }
     setHistLoading(true);
     try {
-      const qy = query(
-        collection(db, "jeunesse_quiz_attempts"),
-        where("identifier", "==", identifier.trim()),
-        limit(50)
-        );
+      const qy = query(collection(db, "jeunesse_quiz_attempts"), where("identifier", "==", identifier.trim()), limit(50));
       const snap = await getDocs(qy);
       setAttempts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e: any) {
@@ -540,77 +567,116 @@ export default function Jeunesse() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  // ================== HERO UI (pinned) ==================
   const Header = () => (
-    <View style={styles.hero}>
-      <View style={styles.heroTop}>
-        <View style={styles.heroIcon}>
-          <Icon name="leaf-outline" size={18} color="#0B3D2E" />
+    <View style={[hero.heroContainer, { height: heroFixedHeight }]}>
+      <View style={hero.heroPinnedTop}>
+        <View style={hero.heroTopLeft}>
+          <View style={hero.heroIcon}>
+            <Icon name="leaf-outline" size={18} color={HERO_TEXT} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={hero.heroTitle} numberOfLines={1}>
+              {t("jeunesse.title") || "Jeunesse"}
+            </Text>
+            {!compact && (
+              <Text style={hero.heroSub} numberOfLines={1}>
+                {(t("jeunesse.childrenAndYouth") || "Children & Youth") + " · " + (t("jeunesse.amisDeJesus") || "Amis de Jésus")}
+              </Text>
+            )}
+          </View>
         </View>
 
-        <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>{t("jeunesse.title") || "Jeunesse"}</Text>
-          <Text style={styles.heroSub} numberOfLines={1}>
-            {(t("jeunesse.childrenAndYouth") || "Children & Youth") +
-              " · " +
-              (t("jeunesse.amisDeJesus") || "Amis de Jésus")}
-          </Text>
+        <View style={hero.heroTopRight}>
+          <TouchableOpacity onPress={() => setYearPickerOpen(true)} style={hero.yearPill} activeOpacity={0.9}>
+            <Icon name="calendar-outline" size={16} color={HERO_TEXT} />
+            <Text style={hero.yearPillText}>{year}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              const next = !showIdBar;
+              setShowIdBar(next);
+              setForceHeroOpen(next);
+              if (next) setTimeout(() => idInputRef.current?.focus(), 120);
+            }}
+            style={hero.heroIcon}
+            activeOpacity={0.9}
+          >
+            <Icon name={showIdBar ? "close" : "search"} size={18} color={HERO_TEXT} />
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity onPress={() => setYearPickerOpen(true)} style={styles.yearPill} activeOpacity={0.9}>
-          <Icon name="calendar-outline" size={16} color="#0B3D2E" />
-          <Text style={styles.yearPillText}>{year}</Text>
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.idRow}>
-        <Icon name="key-outline" size={16} color="rgba(255,255,255,0.85)" />
-        <TextInput
-          value={identifier}
-          onChangeText={setIdentifier}
-          placeholder={t("jeunesse.enterIdentifier") || "Enter identifier (e.g. JXXXX)"}
-          placeholderTextColor="rgba(255,255,255,0.65)"
-          style={styles.idInput}
-        />
-        <TouchableOpacity onPress={checkResultsByIdentifier} style={styles.idBtn} activeOpacity={0.9}>
-          {checking ? <ActivityIndicator color="#0B3D2E" /> : <Icon name="search" size={18} color="#0B3D2E" />}
-        </TouchableOpacity>
+      {/* TABS stay visible always */}
+      <View style={{ marginTop: 10 }}>
+        <TabsRow tab={tab} setTab={setTab} compact={compact} />
       </View>
 
-      <View style={styles.menuRow}>
-        <MenuTab
-          icon="home-outline"
-          label={t("jeunesse.ui.tabs.home")}
-          active={tab === "home"}
-          onPress={() => setTab("home")}
-        />
-        <MenuTab
-          icon="ribbon-outline"
-          label={t("jeunesse.ui.tabs.results")}
-          active={tab === "results"}
-          onPress={() => setTab("results")}
-        />
-        <MenuTab
-          icon="help-circle-outline"
-          label={t("jeunesse.ui.tabs.quiz")}
-          active={tab === "quiz"}
-          onPress={() => setTab("quiz")}
-        />
-        <MenuTab
-          icon="person-add-outline"
-          label={t("jeunesse.ui.tabs.register")}
-          active={tab === "register"}
-          onPress={() => setTab("register")}
-        />
-        <MenuTab
-          icon="time-outline"
-          label={t("jeunesse.ui.tabs.history")}
-          active={tab === "history"}
-          onPress={() => setTab("history")}
-        />
-      </View>
+      {/* Expandable section (slides/clips) */}
+      <Animated.View
+        style={[
+          hero.expandable,
+          {
+            transform: [{ translateY: expandableTranslateY }],
+            opacity: expandableOpacity,
+          },
+        ]}
+      >
+        {showIdBar && (
+          <View style={hero.idRow}>
+            <Icon name="key-outline" size={16} color="rgba(6,51,37,0.75)" />
+            <TextInput
+              ref={idInputRef}
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder={t("jeunesse.enterIdentifier") || "Enter identifier (e.g. JXXXX)"}
+              placeholderTextColor="rgba(6,51,37,0.45)"
+              style={hero.idInput}
+            />
+            <TouchableOpacity onPress={checkResultsByIdentifier} style={hero.idBtn} activeOpacity={0.9}>
+              {checking ? <ActivityIndicator color={HERO_TEXT} /> : <Icon name="search" size={18} color={HERO_TEXT} />}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Quick action pills (nice like Home) */}
+        {showIdBar && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={hero.quickRow}>
+            <TouchableOpacity onPress={checkResultsByIdentifier} style={hero.quickPill} activeOpacity={0.9}>
+              <Icon name="ribbon-outline" size={16} color={HERO_TEXT} />
+              <Text style={hero.quickText}>{t("jeunesse.ui.tabs.results") || "Results"}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setTab("quiz")} style={hero.quickPill} activeOpacity={0.9}>
+              <Icon name="help-circle-outline" size={16} color={HERO_TEXT} />
+              <Text style={hero.quickText}>{t("jeunesse.ui.tabs.quiz") || "Quiz"}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setTab("register")} style={hero.quickPill} activeOpacity={0.9}>
+              <Icon name="person-add-outline" size={16} color={HERO_TEXT} />
+              <Text style={hero.quickText}>{t("jeunesse.ui.tabs.register") || "Register"}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setTab("history");
+                if (identifier.trim()) loadQuizHistory();
+              }}
+              style={hero.quickPill}
+              activeOpacity={0.9}
+            >
+              <Icon name="time-outline" size={16} color={HERO_TEXT} />
+              <Text style={hero.quickText}>{t("jeunesse.ui.tabs.history") || "History"}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+      </Animated.View>
     </View>
   );
 
+  // ================== TABS CONTENT ==================
   const HomeTab = () => (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       <View style={styles.card}>
@@ -636,8 +702,7 @@ export default function Jeunesse() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.phaseName}>{phaseLabel(p)}</Text>
                 <Text style={styles.phaseSub}>
-                  {norm(per.start) || "—"} → {norm(per.end) || "—"} ·{" "}
-                  {t("jeunesse.ui.home.candidatesCount", { count })}
+                  {norm(per.start) || "—"} → {norm(per.end) || "—"} · {t("jeunesse.ui.home.candidatesCount", { count })}
                 </Text>
               </View>
 
@@ -654,7 +719,7 @@ export default function Jeunesse() {
         <Text style={styles.cardSub}>{t("jeunesse.ui.home.quickActionsSub")}</Text>
 
         <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#0B3D2E" }]} onPress={checkResultsByIdentifier}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#111827" }]} onPress={() => setShowIdBar(true)}>
             <Icon name="search" size={16} color="#fff" />
             <Text style={styles.actionBtnText}>{t("jeunesse.ui.home.searchResults")}</Text>
           </TouchableOpacity>
@@ -664,9 +729,9 @@ export default function Jeunesse() {
             <Text style={styles.actionBtnText}>{t("jeunesse.ui.home.openQuiz")}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#25D366" }]} onPress={() => setTab("register")}>
-            <Icon name="person-add" size={16} color="#0B3D2E" />
-            <Text style={[styles.actionBtnText, { color: "#0B3D2E" }]}>{t("jeunesse.ui.home.register")}</Text>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(50, 221, 121, 0.7)" }]} onPress={() => setTab("register")}>
+            <Icon name="person-add" size={16} color={HERO_TEXT} />
+            <Text style={[styles.actionBtnText, { color: HERO_TEXT }]}>{t("jeunesse.ui.home.register")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -717,11 +782,6 @@ export default function Jeunesse() {
             <Text style={styles.emptySub}>{t("jeunesse.ui.results.emptySub")}</Text>
           </View>
         )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("jeunesse.ui.results.pastYearsTitle")}</Text>
-        <Text style={styles.cardSub}>{t("jeunesse.ui.results.pastYearsSub")}</Text>
       </View>
     </ScrollView>
   );
@@ -796,63 +856,55 @@ export default function Jeunesse() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>{t("jeunesse.ui.register.title")}</Text>
-            <View style={[styles.badgeSoft, { backgroundColor: "rgba(37,211,102,0.12)" }]}>
-              <Text style={[styles.badgeSoftText, { color: "#0B3D2E" }]}>{t("jeunesse.ui.register.badgeNew")}</Text>
+            <View style={[styles.badgeSoft, { backgroundColor: "rgba(50, 221, 121, 0.14)" }]}>
+              <Text style={[styles.badgeSoftText, { color: HERO_TEXT }]}>{t("jeunesse.ui.register.badgeNew")}</Text>
             </View>
           </View>
 
           <Text style={styles.cardSub}>{t("jeunesse.ui.register.subtitle")}</Text>
 
-          <Field label={t("jeunesse.ui.fields.firstName")} value={reg.firstName} onChange={(v) => setReg((p) => ({ ...p, firstName: v }))} />
-          <Field label={t("jeunesse.ui.fields.lastName")} value={reg.lastName} onChange={(v) => setReg((p) => ({ ...p, lastName: v }))} />
+          <Field label={t("jeunesse.ui.fields.firstName")} value={reg.firstName} onChange={(v: string) => setReg((p) => ({ ...p, firstName: v }))} />
+          <Field label={t("jeunesse.ui.fields.lastName")} value={reg.lastName} onChange={(v: string) => setReg((p) => ({ ...p, lastName: v }))} />
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
-              <Field label={t("jeunesse.ui.fields.age")} value={reg.age} onChange={(v) => setReg((p) => ({ ...p, age: v }))} keyboardType="numeric" />
+              <Field label={t("jeunesse.ui.fields.age")} value={reg.age} onChange={(v: string) => setReg((p) => ({ ...p, age: v }))} keyboardType="numeric" />
             </View>
             <View style={{ flex: 1 }}>
-              <Field label={t("jeunesse.ui.fields.class")} value={reg.currentClass} onChange={(v) => setReg((p) => ({ ...p, currentClass: v }))} />
+              <Field label={t("jeunesse.ui.fields.class")} value={reg.currentClass} onChange={(v: string) => setReg((p) => ({ ...p, currentClass: v }))} />
             </View>
           </View>
 
-          <Field label={t("jeunesse.ui.fields.academicYear")} value={reg.academicYear} onChange={(v) => setReg((p) => ({ ...p, academicYear: v }))} />
+          <Field label={t("jeunesse.ui.fields.academicYear")} value={reg.academicYear} onChange={(v: string) => setReg((p) => ({ ...p, academicYear: v }))} />
 
           <View style={styles.divider} />
 
-          <Field label={t("jeunesse.ui.fields.parishName")} value={reg.parishName} onChange={(v) => setReg((p) => ({ ...p, parishName: v }))} />
-          <Field label={t("jeunesse.ui.fields.parishShepherdNames")} value={reg.parishShepherdNames} onChange={(v) => setReg((p) => ({ ...p, parishShepherdNames: v }))} />
-          <Field label={t("jeunesse.ui.fields.mainTeacherNames")} value={reg.mainTeacherNames} onChange={(v) => setReg((p) => ({ ...p, mainTeacherNames: v }))} />
+          <Field label={t("jeunesse.ui.fields.parishName")} value={reg.parishName} onChange={(v: string) => setReg((p) => ({ ...p, parishName: v }))} />
+          <Field label={t("jeunesse.ui.fields.parishShepherdNames")} value={reg.parishShepherdNames} onChange={(v: string) => setReg((p) => ({ ...p, parishShepherdNames: v }))} />
+          <Field label={t("jeunesse.ui.fields.mainTeacherNames")} value={reg.mainTeacherNames} onChange={(v: string) => setReg((p) => ({ ...p, mainTeacherNames: v }))} />
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
-              <Field label={t("jeunesse.ui.fields.shepherdPhone")} value={reg.shepherdPhone} onChange={(v) => setReg((p) => ({ ...p, shepherdPhone: v }))} />
+              <Field label={t("jeunesse.ui.fields.shepherdPhone")} value={reg.shepherdPhone} onChange={(v: string) => setReg((p) => ({ ...p, shepherdPhone: v }))} />
             </View>
             <View style={{ flex: 1 }}>
-              <Field label={t("jeunesse.ui.fields.teacherPhone")} value={reg.teacherPhone} onChange={(v) => setReg((p) => ({ ...p, teacherPhone: v }))} />
+              <Field label={t("jeunesse.ui.fields.teacherPhone")} value={reg.teacherPhone} onChange={(v: string) => setReg((p) => ({ ...p, teacherPhone: v }))} />
             </View>
           </View>
 
-          <Field label={t("jeunesse.ui.fields.email")} value={reg.contactEmail} onChange={(v) => setReg((p) => ({ ...p, contactEmail: v }))} />
+          <Field label={t("jeunesse.ui.fields.email")} value={reg.contactEmail} onChange={(v: string) => setReg((p) => ({ ...p, contactEmail: v }))} />
 
           <View style={styles.divider} />
 
-          <Field label={t("jeunesse.ui.fields.country")} value={reg.country} onChange={(v) => setReg((p) => ({ ...p, country: v }))} />
-          <Field label={t("jeunesse.ui.fields.province")} value={reg.province} onChange={(v) => setReg((p) => ({ ...p, province: v }))} />
-          <Field label={t("jeunesse.ui.fields.city")} value={reg.city} onChange={(v) => setReg((p) => ({ ...p, city: v }))} />
-          <Field label={t("jeunesse.ui.fields.region")} value={reg.region} onChange={(v) => setReg((p) => ({ ...p, region: v }))} />
-          <Field label={t("jeunesse.ui.fields.subRegion")} value={reg.subRegion} onChange={(v) => setReg((p) => ({ ...p, subRegion: v }))} />
+          <Field label={t("jeunesse.ui.fields.country")} value={reg.country} onChange={(v: string) => setReg((p) => ({ ...p, country: v }))} />
+          <Field label={t("jeunesse.ui.fields.province")} value={reg.province} onChange={(v: string) => setReg((p) => ({ ...p, province: v }))} />
+          <Field label={t("jeunesse.ui.fields.city")} value={reg.city} onChange={(v: string) => setReg((p) => ({ ...p, city: v }))} />
+          <Field label={t("jeunesse.ui.fields.region")} value={reg.region} onChange={(v: string) => setReg((p) => ({ ...p, region: v }))} />
+          <Field label={t("jeunesse.ui.fields.subRegion")} value={reg.subRegion} onChange={(v: string) => setReg((p) => ({ ...p, subRegion: v }))} />
 
-          <TouchableOpacity
-            onPress={registerChild}
-            style={[styles.primaryBtn, { backgroundColor: "#25D366" }]}
-            activeOpacity={0.9}
-          >
-            {savingReg ? (
-              <ActivityIndicator color="#0B3D2E" />
-            ) : (
-              <Icon name="save-outline" size={16} color="#0B3D2E" />
-            )}
-            <Text style={[styles.primaryBtnText, { color: "#0B3D2E" }]}>{t("jeunesse.ui.register.submit")}</Text>
+          <TouchableOpacity onPress={registerChild} style={[styles.primaryBtn, { backgroundColor: "rgba(50, 221, 121, 0.7)" }]} activeOpacity={0.9}>
+            {savingReg ? <ActivityIndicator color={HERO_TEXT} /> : <Icon name="save-outline" size={16} color={HERO_TEXT} />}
+            <Text style={[styles.primaryBtnText, { color: HERO_TEXT }]}>{t("jeunesse.ui.register.submit")}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -885,9 +937,7 @@ export default function Jeunesse() {
                   <Icon name="help-outline" size={18} color="#111" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.attemptTitle}>
-                    {t("jeunesse.ui.history.scoreLabel", { score: a.score, total: a.total })}
-                  </Text>
+                  <Text style={styles.attemptTitle}>{t("jeunesse.ui.history.scoreLabel", { score: a.score, total: a.total })}</Text>
                   <Text style={styles.attemptSub}>
                     {a.submittedAt ? new Date(Number(a.submittedAt)).toLocaleString() : "—"} ·{" "}
                     {a.autoSubmitted ? t("jeunesse.ui.history.modeAuto") : t("jeunesse.ui.history.modeManual")}
@@ -910,11 +960,6 @@ export default function Jeunesse() {
           </View>
         )}
       </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("jeunesse.ui.history.tipTitle")}</Text>
-        <Text style={styles.cardSub}>{t("jeunesse.ui.history.tipSub")}</Text>
-      </View>
     </ScrollView>
   );
 
@@ -931,19 +976,30 @@ export default function Jeunesse() {
 
   return (
     <View style={styles.screen}>
+      <StatusBar barStyle="dark-content" backgroundColor={HERO_BG} />
+
+      {/* HERO (absolute, fixed height, no animated height) */}
       <Header />
 
-      {tab === "home" ? (
-        <HomeTab />
-      ) : tab === "results" ? (
-        <ResultsTab />
-      ) : tab === "quiz" ? (
-        <QuizTab />
-      ) : tab === "register" ? (
-        <RegisterTab />
-      ) : (
-        <HistoryTab />
-      )}
+      {/* CONTENT as FlatList-style scroll so hero collapses smoothly */}
+      <Animated.ScrollView
+        contentContainerStyle={{ paddingTop: heroFixedHeight + 12, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
+      >
+        {tab === "home" ? (
+          <HomeTab />
+        ) : tab === "results" ? (
+          <ResultsTab />
+        ) : tab === "quiz" ? (
+          <QuizTab />
+        ) : tab === "register" ? (
+          <RegisterTab />
+        ) : (
+          <HistoryTab />
+        )}
+      </Animated.ScrollView>
 
       {/* ================= YEAR PICKER ================= */}
       <Modal visible={yearPickerOpen} transparent animationType="fade" onRequestClose={() => setYearPickerOpen(false)}>
@@ -964,7 +1020,7 @@ export default function Jeunesse() {
               {availableYears.map((y) => (
                 <TouchableOpacity
                   key={y}
-                  style={[styles.pickItem, y === year && { backgroundColor: "rgba(37,211,102,0.12)" }]}
+                  style={[styles.pickItem, y === year && { backgroundColor: "rgba(50, 221, 121, 0.14)" }]}
                   onPress={() => {
                     setYear(y);
                     setYearPickerOpen(false);
@@ -972,8 +1028,8 @@ export default function Jeunesse() {
                   }}
                   activeOpacity={0.9}
                 >
-                  <Text style={[styles.pickText, y === year && { color: "#0B3D2E" }]}>{y}</Text>
-                  {y === year ? <Icon name="checkmark" size={18} color="#0B3D2E" /> : null}
+                  <Text style={[styles.pickText, y === year && { color: HERO_TEXT }]}>{y}</Text>
+                  {y === year ? <Icon name="checkmark" size={18} color={HERO_TEXT} /> : null}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -989,7 +1045,9 @@ export default function Jeunesse() {
               <Icon name="chevron-back" size={22} color="#111" />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fullTitle} numberOfLines={1}>{listTitle}</Text>
+              <Text style={styles.fullTitle} numberOfLines={1}>
+                {listTitle}
+              </Text>
               <Text style={styles.fullSub} numberOfLines={1}>
                 {t("jeunesse.ui.candidatesModal.sub")}
               </Text>
@@ -1010,7 +1068,8 @@ export default function Jeunesse() {
                     {norm(item.firstName)} {norm(item.lastName)}
                   </Text>
                   <Text style={styles.fullRowSub} numberOfLines={1}>
-                    {t("jeunesse.ui.misc.idLabel")}: {norm(item.identifier) || "—"} · {norm(item.country) || "—"} / {norm(item.city) || "—"}
+                    {t("jeunesse.ui.misc.idLabel")}: {norm(item.identifier) || "—"} · {norm(item.country) || "—"} /{" "}
+                    {norm(item.city) || "—"}
                   </Text>
                 </View>
               </View>
@@ -1036,14 +1095,18 @@ export default function Jeunesse() {
             </TouchableOpacity>
 
             <View style={{ flex: 1 }}>
-              <Text style={styles.fullTitle} numberOfLines={1}>{quizTitle}</Text>
+              <Text style={styles.fullTitle} numberOfLines={1}>
+                {quizTitle}
+              </Text>
               <Text style={[styles.fullSub, { color: "#ef4444" }]} numberOfLines={1}>
                 {t("jeunesse.ui.quizModal.timeLeft", { sec: timeLeft })}
               </Text>
             </View>
 
             <View style={styles.badgeSoft}>
-              <Text style={styles.badgeSoftText}>{quizIndex + 1}/{questions.length}</Text>
+              <Text style={styles.badgeSoftText}>
+                {quizIndex + 1}/{questions.length}
+              </Text>
             </View>
           </View>
 
@@ -1066,7 +1129,7 @@ export default function Jeunesse() {
                       activeOpacity={0.9}
                     >
                       <View style={[styles.optionDot, selected && styles.optionDotOn]}>
-                        {selected ? <Icon name="checkmark" size={14} color="#0B3D2E" /> : null}
+                        {selected ? <Icon name="checkmark" size={14} color={HERO_TEXT} /> : null}
                       </View>
                       <Text style={styles.optionText}>{op}</Text>
                     </TouchableOpacity>
@@ -1097,13 +1160,11 @@ export default function Jeunesse() {
                 ) : (
                   <TouchableOpacity
                     onPress={() => submitQuiz(false)}
-                    style={[styles.navBtn, { backgroundColor: "#25D366" }]}
+                    style={[styles.navBtn, { backgroundColor: "rgba(50, 221, 121, 0.7)" }]}
                     activeOpacity={0.9}
                   >
-                    <Icon name="paper-plane-outline" size={18} color="#0B3D2E" />
-                    <Text style={[styles.navBtnText, { color: "#0B3D2E" }]}>
-                      {t("jeunesse.ui.quizModal.submit")}
-                    </Text>
+                    <Icon name="paper-plane-outline" size={18} color={HERO_TEXT} />
+                    <Text style={[styles.navBtnText, { color: HERO_TEXT }]}>{t("jeunesse.ui.quizModal.submit")}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1116,12 +1177,52 @@ export default function Jeunesse() {
 }
 
 /* ================= SMALL UI COMPONENTS ================= */
-function MenuTab({ icon, label, active, onPress }: any) {
+function TabsRow({ tab, setTab, compact }: { tab: TabKey; setTab: any; compact: boolean }) {
+  const items = [
+    { key: "home", icon: "home-outline", label: "Home" },
+    { key: "results", icon: "ribbon-outline", label: "Results" },
+    { key: "quiz", icon: "help-circle-outline", label: "Quiz" },
+    { key: "register", icon: "person-add-outline", label: "Register" },
+    { key: "history", icon: "time-outline", label: "History" },
+  ] as const;
+
+  if (compact) {
+    return (
+      <View style={hero.compactTabs}>
+        {items.map((it) => {
+          const active = tab === it.key;
+          return (
+            <TouchableOpacity
+              key={it.key}
+              onPress={() => setTab(it.key)}
+              style={[hero.compactTabBtn, active && hero.compactTabBtnActive]}
+              activeOpacity={0.9}
+            >
+              <Icon name={it.icon as any} size={20} color={active ? "#fff" : "rgba(6,51,37,0.55)"} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={[styles.menuTab, active && styles.menuTabOn]}>
-      <Icon name={icon} size={18} color={active ? "#0B3D2E" : "rgba(255,255,255,0.9)"} />
-      <Text style={[styles.menuTabText, active && styles.menuTabTextOn]}>{label}</Text>
-    </TouchableOpacity>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={hero.pillsRow}>
+      {items.map((it) => {
+        const active = tab === it.key;
+        return (
+          <TouchableOpacity
+            key={it.key}
+            onPress={() => setTab(it.key)}
+            style={[hero.pill, active && hero.pillActive]}
+            activeOpacity={0.9}
+          >
+            <Icon name={it.icon as any} size={16} color={active ? "#fff" : "rgba(2, 39, 27, 0.9)"} />
+            <Text style={[hero.pillText, active && hero.pillTextActive]}>{it.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -1141,74 +1242,139 @@ function Field({ label, value, onChange, keyboardType }: any) {
   );
 }
 
-/* ================= STYLES ================= */
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F4F5F7" },
-
-  hero: {
-    backgroundColor: "rgba(50, 221, 121, 0.7)",
-    paddingTop: 14,
+/* ================= HERO STYLES (MATCH HOME) ================= */
+const hero = StyleSheet.create({
+  heroContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    backgroundColor: HERO_BG,
+    paddingTop: Platform.select({ ios: 54, android: 14 }),
     paddingHorizontal: 14,
     paddingBottom: 14,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: HERO_RADIUS,
+    borderBottomRightRadius: HERO_RADIUS,
+    overflow: "hidden",
+    elevation: 4,
+    zIndex: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.06)",
   },
-  heroTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+
+  heroPinnedTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  heroTopLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  heroTopRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+
   heroIcon: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.55)",
+    backgroundColor: HERO_ICON_BG,
     alignItems: "center",
     justifyContent: "center",
   },
-  heroTitle: { color: "rgba(6, 51, 37, 0.91)", fontSize: 20, fontWeight: "900" },
-  heroSub: { marginTop: 4, color: "rgba(6, 51, 37, 0.91)", fontWeight: "800", fontSize: 12.5 },
+
+  heroTitle: { color: HERO_TEXT, fontSize: 20, fontWeight: "900" },
+  heroSub: { marginTop: 4, color: "rgba(6, 51, 37, 0.65)", fontWeight: "800", fontSize: 12.5 },
 
   yearPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(245,245,245,1)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  yearPillText: { fontWeight: "900", color: HERO_TEXT },
+
+  // Tabs (same as Home)
+  pillsRow: { gap: 10, paddingRight: 14 },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(110, 197, 129, 0.55)",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
   },
-  yearPillText: { fontWeight: "900", color: "#0B3D2E" },
+  pillActive: {
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  pillText: { fontWeight: "900", color: "rgba(2, 44, 31, 0.7)", fontSize: 12 },
+  pillTextActive: { color: "#fff" },
+
+  compactTabs: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    backgroundColor: "rgba(245,245,245,1)",
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  compactTabBtn: { flex: 1, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  compactTabBtnActive: { backgroundColor: "#111827" },
+
+  // Expandable
+  expandable: { marginTop: 12 },
 
   idRow: {
-    marginTop: 12,
+    marginTop: 2,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(11,61,46,0.20)",
+    backgroundColor: "rgba(245,245,245,1)",
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  idInput: { flex: 1, color: "#fff", fontWeight: "900" },
+  idInput: { flex: 1, color: HERO_TEXT, fontWeight: "900" },
   idBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.65)",
+    backgroundColor: "rgba(255,255,255,0.92)",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
 
-  menuRow: { marginTop: 12, flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  menuTab: {
+  quickRow: { paddingTop: 10, gap: 10, paddingRight: 14 },
+  quickPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    backgroundColor: "rgba(245,245,245,1)",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "rgba(11,61,46,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  menuTabOn: { backgroundColor: "rgba(255,255,255,0.70)" },
-  menuTabText: { color: "rgba(255,255,255,0.95)", fontWeight: "900", fontSize: 12 },
-  menuTabTextOn: { color: "#0B3D2E" },
+  quickText: { fontWeight: "900", color: HERO_TEXT },
+});
+
+/* ================= STYLES (your original, kept) ================= */
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#F4F5F7" },
 
   card: {
     backgroundColor: "#fff",
@@ -1398,8 +1564,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     marginBottom: 10,
   },
-  fullNum: { width: 34, height: 34, borderRadius: 12, backgroundColor: "rgba(37,211,102,0.12)", alignItems: "center", justifyContent: "center" },
-  fullNumText: { fontWeight: "900", color: "#0B3D2E" },
+  fullNum: { width: 34, height: 34, borderRadius: 12, backgroundColor: "rgba(50, 221, 121, 0.14)", alignItems: "center", justifyContent: "center" },
+  fullNumText: { fontWeight: "900", color: HERO_TEXT },
   fullRowTitle: { fontWeight: "900", color: "#111" },
   fullRowSub: { marginTop: 4, fontSize: 12, fontWeight: "800", color: "#6B6B70" },
 
@@ -1423,8 +1589,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   optionRowOn: {
-    borderColor: "rgba(37,211,102,0.45)",
-    backgroundColor: "rgba(37,211,102,0.10)",
+    borderColor: "rgba(50, 221, 121, 0.38)",
+    backgroundColor: "rgba(50, 221, 121, 0.10)",
   },
   optionDot: {
     width: 26,
@@ -1434,7 +1600,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  optionDotOn: { backgroundColor: "rgba(255,255,255,0.85)" },
+  optionDotOn: { backgroundColor: "rgba(255,255,255,0.95)" },
   optionText: { fontWeight: "800", color: "#111", flex: 1 },
 
   navBtn: {
