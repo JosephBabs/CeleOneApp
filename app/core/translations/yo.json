@@ -230,6 +230,48 @@
   },
   
   "settings": {
+    "search": "Wa ninu eto",
+"search_results": "Abajade wiwa",
+"no_results": "Ko si abajade",
+"no_results_sub": "Gbiyanju ọrọ miiran.",
+"settings": "Eto",
+"more": "Míì",
+"subtitle": "Akọọlẹ, ṣiṣiṣẹ ati ìforúkọsílẹ",
+
+"packages": "Àpò ìforúkọsílẹ",
+"packages_sub": "Yan àpò kan",
+"packages_hint": "Yan àpò kan lati tẹsiwaju si isanwo.",
+"no_packages": "Ko si àpò to n ṣiṣẹ",
+"no_packages_sub": "Ṣẹda àpò ninu subscription_packages.",
+
+"duration": "Àkókò",
+"days": "ọjọ́",
+"price": "Iye",
+"active": "Nṣiṣẹ",
+"inactive": "Ko ṣiṣẹ",
+"pending": "N dúró de",
+"canceled": "Ti fagilé",
+
+"payment": "Isanwo",
+"payment_sub": "Yan olupese ati ọna isanwo",
+"payment_provider": "Olupese isanwo",
+"payment_method": "Ọna isanwo",
+"mobile_payment": "Isanwo alagbeka",
+"bank_card": "Kaadi banki",
+"pay_now": "Sanwo bayii",
+"payment_hint": "API isanwo yoo wa nigbamii. Fun bayi, a ṣẹda ìforúkọsílẹ pending.",
+"payment_pending": "Isanwo ti bẹrẹ. N dúró de ìmúdájú.",
+"payment_failed": "Isanwo kuna",
+
+"mtn_celtis": "MTN Celtis",
+"momo": "MoMo",
+
+"no_user": "O gbọdọ wọle.",
+"loading_packages": "N gba awọn àpò...",
+"no_package_selected": "Ko si àpò ti a yan",
+"no_package_selected_sub": "Pada ki o yan àpò kan.",
+
+"sub_status_pending": "N DÚRÓ DE",
     "loading": "Ń gbà á wọlé...",
     "profile_title": "Ìròyìn ẹni",
     "profile": "Ìròyìn ẹni",
@@ -416,6 +458,162 @@
     "invalidCurrentPassword": "Ọ̀rọ̀ aṣínà lọ́wọ́lọ́wọ́ kò tọ̀",
     "weakNewPassword": "Ọ̀rọ̀ aṣínà tuntun kò lágbára tó"
   },
+
+  "media": {
+    "screenTitle": "Fíìmù & Orin",
+    "screenSubtitle": "Wá · Àmi · Playlist · Offline",
+
+    "tabs": {
+      "forYou": "Fún ọ",
+      "music": "Orin",
+      "filmsSeries": "Fíìmù/Àtẹ̀jáde"
+    },
+
+    "search": {
+      "placeholder": "Wá fíìmù, orin, olórin…",
+      "allTags": "Gbogbo"
+    },
+
+    "quick": {
+      "favorites": "Àwọn ayanfẹ",
+      "offline": "Offline",
+      "playlists": "Playlist",
+      "manageSubscription": "Ṣètò ìforúkọsílẹ̀",
+      "subscribe": "Forúkọsílẹ̀"
+    },
+
+    "subscription": {
+      "requiredTitle": "Ìforúkọsílẹ̀ ní dandan",
+      "cancel": "Fagilé",
+      "viewOffers": "Wo àwọn ètò",
+      "active": "Ṣíṣẹ́",
+      "inactive": "Kò ṣiṣẹ́",
+      "free": "Ọ̀fẹ́",
+      "activeHint": "Ìforúkọsílẹ̀ ń ṣiṣẹ́{{pkg}}. Streaming ti ṣí.",
+      "inactiveHint": "Láìsí ìforúkọsílẹ̀, streaming ti dínà. Forúkọsílẹ̀ láti wo/tẹ́tí sí.",
+      "pkgFormat": " ({{name}})",
+      "expiringTitle": "Ìforúkọsílẹ̀ ń parí laipẹ́",
+      "expiringMsg": "O ní díẹ̀ bíi ọjọ́ {{days}} ku. Ronú láti tún ṣe.",
+      "expiredTitle": "Ìforúkọsílẹ̀ ti parí",
+      "expiredMsg": "Ìforúkọsílẹ̀ rẹ ti parí. Tún ṣe kí o lè tẹ̀síwájú."
+    },
+
+    "settingsActive": {
+      "title": "Àwọn ìṣètò tó ṣiṣẹ́:",
+      "wifiOnly": "Wi-Fi nìkan",
+      "dataSaver": "Fipamọ́ data",
+      "reducedImages": "Dín àwòrán kù"
+    },
+
+    "network": {
+      "title": "Ìbánisọ̀rọ̀",
+      "noInternet": "Kò sí ìbánisọ̀rọ̀ Internet."
+    },
+
+    "badges": {
+      "premium": "Premium",
+      "free": "Ọ̀FẸ́"
+    },
+
+    "counts": {
+      "plays": "Ìtẹ́tísí {{count}}",
+      "views": "Ìwò {{count}}",
+      "videosCount": "Fídíò {{count}}",
+      "tracksCount": "Orin {{count}}",
+      "featured": "Àkọ́kọ́"
+    },
+
+    "labels": {
+      "unknownTitle": "Àkọlé àìmọ̀",
+      "unknownArtist": "Olórin àìmọ̀",
+      "untitled": "Kò ní àkọlé",
+      "channel": "Ikanni",
+      "recently": "Láìpẹ́",
+      "music": "Orin",
+      "seriesEpisodes": "Àtẹ̀jáde • Ẹ̀yà",
+      "episodes": "Ẹ̀yà",
+      "noDescription": "Kò sí àpejuwe.",
+      "noDescriptionShort": "Kò sí àpejuwe."
+    },
+
+    "locks": {
+      "subscriptionRequired": "Ìforúkọsílẹ̀ ní dandan",
+      "locked": "Ti dínà",
+      "streamingLocked": "Streaming ti dínà · Forúkọsílẹ̀ láti wo."
+    },
+
+    "actionsSheet": {
+      "title": "Àwọn ìṣe",
+      "addToFavorites": "Fi sí ayanfẹ",
+      "removeFromFavorites": "Yọ kúrò ní ayanfẹ",
+      "addOffline": "Fi sí Offline",
+      "removeOffline": "Yọ kúrò ní Offline",
+      "addToPlaylist": "Fi sí playlist",
+      "createPlaylist": "Dá playlist ṣẹ̀",
+      "alreadyInPlaylist": "Ó ti wà nínú playlist yìí tẹ́lẹ̀.",
+      "addedToPlaylist": "A ti fi sí playlist.",
+      "errorAddPlaylist": "Kò le fi sí playlist.",
+      "errorUpdateFavorites": "Kò le ṣe àtúnṣe ayanfẹ.",
+      "errorUpdateOffline": "Kò le ṣe àtúnṣe Offline."
+    },
+
+    "playlist": {
+      "title": "Playlist",
+      "yourPlaylists": "Playlist rẹ",
+      "newTitle": "Playlist tuntun",
+      "namePlaceholder": "Orúkọ playlist",
+      "create": "Dá ṣẹ̀",
+      "open": "Ṣí",
+      "items": "Nǹkan",
+      "emptyPlaylists": "Kò sí playlist",
+      "emptyItems": "Kò sí nǹkan",
+      "enterName": "Tẹ orúkọ playlist.",
+      "createError": "Kò le dá playlist ṣẹ̀."
+    },
+
+    "bottomSheet": {
+      "browse": "Ṣàwárí",
+      "favorites": "Àwọn ayanfẹ rẹ",
+      "downloads": "Offline",
+      "library": "Playlist",
+      "shortcuts": "Ọ̀nà kúkúrú",
+      "mediaSettings": "Ìṣètò média",
+      "emptyFavorites": "Kò sí ayanfẹ",
+      "emptyOffline": "Kò sí nǹkan Offline"
+    },
+
+    "player": {
+      "audioTitle": "Ẹrọ orin",
+      "videoTitle": "Fídíò",
+      "noAudioLink": "Orin yìí kò ní ìjápọ̀ audio.",
+      "noVideoLink": "Kò sí ìjápọ̀ fídíò",
+      "cannotPlayAudio": "Kò le ṣeré audio yìí.",
+      "cannotPlayVideo": "Kò le ṣeré fídíò yìí.",
+      "episodeNoLink": "Ẹ̀yà yìí kò ní ìjápọ̀ fídíò.",
+      "shareTitle": "Pín",
+      "shareFallback": "Pípín kò sí lórí ẹrọ yìí.",
+      "shareNothing": "Kò sí nǹkan láti pín.",
+      "subscribeToListen": "Forúkọsílẹ̀ láti tẹ́tí sí orin.",
+      "subscribeToWatch": "Forúkọsílẹ̀ láti wo fíìmù/àtẹ̀jáde.",
+      "subscribeBtn": "Forúkọsílẹ̀",
+      "play": "Ṣeré",
+      "like": "Fẹ́ràn",
+      "favorite": "Ayanfẹ",
+      "offline": "Offline",
+      "playlist": "Playlist",
+      "watch": "Wo",
+      "watchSeries": "Ṣeré àtẹ̀jáde",
+      "watchVideo": "Ṣeré"
+    },
+
+    "hints": {
+      "playerSettingsAudio": "Didara audio: {{quality}} · Background: {{bg}} · Data saver: {{data}}",
+      "playerSettingsVideo": "Didara fídíò: {{quality}} · Captions: {{cap}} · Data saver: {{data}}",
+      "on": "ON",
+      "off": "OFF"
+    }
+  },
+
   "lang": {
     "en": "Gẹ̀ẹ́sì",
     "fr": "Faranse",

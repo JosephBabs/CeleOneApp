@@ -1,16 +1,15 @@
 /* eslint-disable react/no-unstable-nested-components */
 /* eslint-disable react-native/no-inline-styles */
 // Settings.tsx
-// Premium Profile + Settings + FULL-PAGE MODALS implementation
-// - Saves settings to AsyncStorage + Firestore (so user recovers on another phone)
-// - Audio & Video settings (quality, autoplay, captions, background play, etc.)
-// - Playback settings (repeat, autoplay next, crossfade, speed default, normalize audio)
-// - Data Saver settings (Wi-Fi only streaming/download, low data mode, image quality)
-// - Security settings (change password with re-auth, app lock toggle, hide email, session sign-out all placeholder)
-// - Subscription settings (fetch subscription from Firestore)
-// - More options (Share app, Contact support)
-// NOTE: These settings are “real” in the sense they persist + are usable across the app.
-// To enforce them app-wide, read from AsyncStorage keys or Firestore on app start.
+// ✅ Redesigned with FIXED top section (scroll behind it)
+// ✅ Top card can EXPAND / COLLAPSE (no animated height)
+// ✅ Settings SEARCH + indexed navigation chips
+// ✅ Subscription uses your REAL collections:
+//    - subscription_packages (packages)
+//    - user_subscriptions (user subscription history / latest)
+// ✅ Payment page UI (MTN Celtis + MoMo) with Mobile / Bank Card toggle (API later)
+// ✅ DOES NOT remove/omit your existing functions (kept + extended)
+// ✅ Keeps your existing translation keys (we only add fallbacks like t('settings.search') || 'Search settings')
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -30,6 +29,7 @@ import {
   ActivityIndicator,
   Share,
   Linking,
+  Animated,
 } from 'react-native';
 
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -37,8 +37,26 @@ import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
 import { COLORS, Colors } from '../../../core/theme/colors';
-import { getAuth, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  getAuth,
+  signOut,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+  collection,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  addDoc,
+} from 'firebase/firestore';
 import { db } from '../auth/firebaseConfig';
 
 type SettingsDoc = {
@@ -50,13 +68,13 @@ type SettingsDoc = {
     videoQuality: 'auto' | '360p' | '480p' | '720p' | '1080p';
     autoPlayVideos: boolean;
     captionsEnabled: boolean;
-    backgroundPlay: boolean; // allow audio to continue (app-level integration required)
+    backgroundPlay: boolean;
   };
 
   playback: {
     autoPlayNext: boolean;
     repeatMode: 'off' | 'one' | 'all';
-    crossfadeSeconds: number; // 0..12
+    crossfadeSeconds: number;
     defaultSpeed: 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
     normalizeAudio: boolean;
     skipSilence: boolean;
@@ -71,12 +89,34 @@ type SettingsDoc = {
   };
 
   security: {
-    appLockEnabled: boolean; // placeholder (biometrics/pin integration required)
+    appLockEnabled: boolean;
     hideEmail: boolean;
   };
 
   language: string;
+  updatedAt?: any;
+};
 
+// Your real “user_subscriptions” doc shape
+type UserSubscriptionRow = {
+  uid: string;
+  packageId: string;
+  packageName: string;
+  price: number;
+  startAt: number;
+  endAt: number;
+  status: 'active' | 'inactive' | 'cancelled' | 'pending' | 'trial' | string;
+  updatedAt?: any;
+};
+
+// Your real “subscription_packages” shape
+type SubscriptionPackage = {
+  id: string;
+  name: string;
+  price: number;
+  durationDays: number;
+  isActive: boolean;
+  createdAt?: any;
   updatedAt?: any;
 };
 
@@ -131,7 +171,14 @@ function deepMerge<T extends object>(base: T, override: Partial<T>): T {
   for (const k of Object.keys(override || {})) {
     const ov: any = (override as any)[k];
     const bv: any = (base as any)[k];
-    if (ov && typeof ov === 'object' && !Array.isArray(ov) && bv && typeof bv === 'object' && !Array.isArray(bv)) {
+    if (
+      ov &&
+      typeof ov === 'object' &&
+      !Array.isArray(ov) &&
+      bv &&
+      typeof bv === 'object' &&
+      !Array.isArray(bv)
+    ) {
       out[k] = deepMerge(bv, ov);
     } else if (ov !== undefined) {
       out[k] = ov;
@@ -139,6 +186,18 @@ function deepMerge<T extends object>(base: T, override: Partial<T>): T {
   }
   return out;
 }
+
+/* ================== FIXED HEADER TOKENS (matches your Jeunesse vibe) ================== */
+const HERO_BG_LIGHT = '#fff';
+const HERO_BG_DARK = '#0E0E0E';
+const HERO_TEXT_LIGHT = 'rgba(6, 51, 37, 0.91)';
+const HERO_TEXT_DARK = '#EDEDED';
+const HERO_ICON_BG_LIGHT = 'rgba(219, 219, 219, 0.55)';
+const HERO_ICON_BG_DARK = 'rgba(255,255,255,0.08)';
+const HERO_RADIUS = 24;
+
+const HERO_EXPANDED = Platform.select({ ios: 270, android: 260 }) as number;
+const HERO_COLLAPSED = Platform.select({ ios: 138, android: 188 }) as number;
 
 const Settings = ({ navigation }: any) => {
   const { t, i18n } = useTranslation();
@@ -153,11 +212,46 @@ const Settings = ({ navigation }: any) => {
 
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [activeModal, setActiveModal] = useState<
-    null | 'audioVideo' | 'playback' | 'dataSaver' | 'security' | 'subscription' | 'moreOptions'
+    | null
+    | 'audioVideo'
+    | 'playback'
+    | 'dataSaver'
+    | 'security'
+    | 'subscription'
+    | 'moreOptions'
+    | 'packages'
+    | 'payment'
   >(null);
 
+  // (kept) old "subscription" variable — we still compute it for your UI logic
   const [subscription, setSubscription] = useState<SubscriptionDoc | null>(null);
   const [loadingSub, setLoadingSub] = useState(false);
+
+  // NEW: real subscription rows + packages
+  const [userSubRow, setUserSubRow] = useState<UserSubscriptionRow | null>(null);
+  const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+
+  const [selectedPackage, setSelectedPackage] = useState<SubscriptionPackage | null>(null);
+
+  // Payment UI state (API later)
+  const [paymentProvider, setPaymentProvider] = useState<'mtn_celtis' | 'momo' | null>('mtn_celtis');
+  const [paymentMethod, setPaymentMethod] = useState<'mobile' | 'card'>('mobile');
+  const [payBusy, setPayBusy] = useState(false);
+
+  // Search + indexing
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+
+  const sectionRefs = useRef<Record<string, View | null>>({
+    mainSettings: null,
+    otherLinks: null,
+  });
+
+  // Fixed header size handling
+  const [headerHeight, setHeaderHeight] = useState(HERO_EXPANDED);
+  const [headerExpanded, setHeaderExpanded] = useState(true);
 
   const saveTimer = useRef<any>(null);
 
@@ -188,23 +282,28 @@ const Settings = ({ navigation }: any) => {
     return lng.toUpperCase();
   }, [i18n.language, t]);
 
+  // Old isPremium logic — still supported
   const isPremium = useMemo(() => {
     const plan = subscription?.plan || 'free';
     const status = subscription?.status || 'inactive';
     return (plan === 'premium' || plan === 'pro') && status === 'active';
   }, [subscription]);
 
-  // ---- Firestore paths (simple + reliable)
+  // NEW: derive premium from your real row too (used in header pill)
+  const isPremiumReal = useMemo(() => {
+    const st = String(userSubRow?.status || '').toLowerCase();
+    return st === 'active' && !!userSubRow?.packageId;
+  }, [userSubRow]);
+
+  // ---- Firestore paths (kept)
   const userSettingsRef = useMemo(() => {
     if (!uid) return null;
-    // store in /user_data/{uid}/app_settings/main
-    // so it lives with your existing user_data doc but separated.
     return doc(db, 'user_data', uid, 'app_settings', 'main');
   }, [uid]);
 
+  // (kept) old ref - not used for fetching now, but not removed
   const userSubRef = useMemo(() => {
     if (!uid) return null;
-    // subscription stored at /user_data/{uid}/subscription/main
     return doc(db, 'user_data', uid, 'subscription', 'main');
   }, [uid]);
 
@@ -227,7 +326,6 @@ const Settings = ({ navigation }: any) => {
   useEffect(() => {
     const hydrate = async () => {
       if (!uid) {
-        // still allow local-only settings when logged out
         try {
           const localStr = await AsyncStorage.getItem(SETTINGS_ASYNC_KEY);
           const local = localStr ? (JSON.parse(localStr) as Partial<SettingsDoc>) : {};
@@ -250,15 +348,11 @@ const Settings = ({ navigation }: any) => {
         const merged = deepMerge(DEFAULT_SETTINGS, deepMerge(remote || {}, local || {}));
         setSettings(merged);
 
-        // apply language if stored (best effort)
         if (merged.language && merged.language !== i18n.language) {
           try {
             await i18n.changeLanguage(merged.language);
           } catch {}
         }
-
-        // apply dark mode toggle (best effort) — we respect ThemeContext as source of truth:
-        // if remote says dark and theme is not dark, user can toggle switch to sync.
       } catch (e) {
         console.log('settings hydrate error', e);
         setSettings(DEFAULT_SETTINGS);
@@ -341,16 +435,49 @@ const Settings = ({ navigation }: any) => {
     );
   };
 
-  // ---- Subscription fetch
+  // ---- Subscription fetch (UPDATED to your REAL collections)
   const fetchSubscription = async () => {
-    if (!uid || !userSubRef) return;
+    if (!uid) return;
+
     setLoadingSub(true);
     try {
-      const snap = await getDoc(userSubRef);
-      if (snap.exists()) setSubscription(snap.data() as SubscriptionDoc);
-      else setSubscription({ plan: 'free', status: 'inactive' });
+      // 1) latest user subscription row
+      const qy = query(
+        collection(db, 'user_subscriptions'),
+        where('uid', '==', uid),
+        limit(1),
+      );
+      const snap = await getDocs(qy);
+
+      if (!snap.empty) {
+        const d = snap.docs[0].data() as any;
+        const row: UserSubscriptionRow = {
+          uid: d.uid,
+          packageId: d.packageId,
+          packageName: d.packageName,
+          price: Number(d.price || 0),
+          startAt: Number(d.startAt || 0),
+          endAt: Number(d.endAt || 0),
+          status: d.status,
+          updatedAt: d.updatedAt,
+        };
+        setUserSubRow(row);
+
+        // map to old SubscriptionDoc (kept) so your existing premium logic still works
+        const status = String(row.status || '').toLowerCase();
+        setSubscription({
+          plan: status === 'active' ? 'premium' : 'free',
+          status: status === 'active' ? 'active' : 'inactive',
+          expiresAt: row.endAt ? row.endAt : undefined,
+          provider: 'firestore',
+        });
+      } else {
+        setUserSubRow(null);
+        setSubscription({ plan: 'free', status: 'inactive' });
+      }
     } catch (e) {
       console.log('sub fetch error', e);
+      setUserSubRow(null);
       setSubscription({ plan: 'free', status: 'inactive' });
     } finally {
       setLoadingSub(false);
@@ -362,13 +489,40 @@ const Settings = ({ navigation }: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
+  // ---- Packages fetch
+  const fetchPackages = async () => {
+    setLoadingPackages(true);
+    try {
+      const qy = query(collection(db, 'subscription_packages'), where('isActive', '==', true));
+      const snap = await getDocs(qy);
+
+      const rows: SubscriptionPackage[] = snap.docs.map(d => {
+        const x = d.data() as any;
+        return {
+          id: d.id,
+          name: String(x.name || ''),
+          price: Number(x.price || 0),
+          durationDays: Number(x.durationDays || 0),
+          isActive: !!x.isActive,
+          createdAt: x.createdAt,
+          updatedAt: x.updatedAt,
+        };
+      });
+
+      setPackages(rows);
+    } catch (e) {
+      console.log('packages fetch error', e);
+      setPackages([]);
+    } finally {
+      setLoadingPackages(false);
+    }
+  };
+
   // ---- More options actions
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message:
-          t('settings.share_message') ||
-          'Try this app! Download and enjoy the full experience.',
+        message: t('settings.share_message') || 'Try this app! Download and enjoy the full experience.',
       });
     } catch {}
   };
@@ -389,12 +543,50 @@ const Settings = ({ navigation }: any) => {
   };
 
   const showAlert = (message: string) => {
-    Alert.alert(t('common.info') || 'Info', message, [{ text: 'OK', style: 'default' }], {
-      cancelable: true,
-    });
+    Alert.alert(t('common.info') || 'Info', message, [{ text: 'OK', style: 'default' }], { cancelable: true });
   };
 
-  // --- Row component (matches list style)
+  // ---- Create pending subscription (payment API later)
+  const createPendingSubscription = async () => {
+    if (!uid) return Alert.alert(t('common.error') || 'Error', t('settings.no_user') || 'You must be logged in.');
+    if (!selectedPackage) return;
+
+    setPayBusy(true);
+    try {
+      const startAt = Date.now();
+      const endAt = startAt + selectedPackage.durationDays * 24 * 60 * 60 * 1000;
+
+      await addDoc(collection(db, 'user_subscriptions'), {
+        uid,
+        packageId: selectedPackage.id,
+        packageName: selectedPackage.name,
+        price: selectedPackage.price,
+        startAt,
+        endAt,
+        status: 'pending', // API later will mark active/cancelled
+        paymentProvider: paymentProvider || null,
+        paymentMethod: paymentMethod,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      Alert.alert(
+        t('settings.subscription') || 'Subscription',
+        t('settings.payment_pending') || 'Payment initialized (pending). Add payment API later to confirm.',
+      );
+
+      setActiveModal(null);
+      setActiveModal('subscription');
+      await fetchSubscription();
+    } catch (e: any) {
+      console.log('createPendingSubscription error', e);
+      Alert.alert(t('common.error') || 'Error', e?.message || (t('settings.payment_failed') || 'Payment failed.'));
+    } finally {
+      setPayBusy(false);
+    }
+  };
+
+  // --- Row component (kept)
   const Row = ({
     icon,
     label,
@@ -420,11 +612,7 @@ const Settings = ({ navigation }: any) => {
             { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
           ]}
         >
-          <Ionicons
-            name={icon as any}
-            size={18}
-            color={danger ? '#E53935' : isDark ? '#EDEDED' : '#222'}
-          />
+          <Ionicons name={icon as any} size={18} color={danger ? '#E53935' : isDark ? '#EDEDED' : '#222'} />
         </View>
 
         <Text style={[styles.rowLabel, { color: danger ? '#E53935' : textColor }]}>{label}</Text>
@@ -435,6 +623,146 @@ const Settings = ({ navigation }: any) => {
       </View>
     </TouchableOpacity>
   );
+
+  // ================== SEARCH INDEX ==================
+  const searchIndex = useMemo(() => {
+    // IMPORTANT: use your existing translation keys (we only use fallbacks)
+    const items = [
+      {
+        key: 'profile',
+        title: t('settings.profile') || 'Profile',
+        keywords: ['profile', 'account', 'user'],
+        action: () => navigation.navigate('Profile'),
+      },
+      {
+        key: 'notification',
+        title: t('settings.notification') || 'Notification',
+        keywords: ['notification', 'alerts', 'push'],
+        action: () => {
+          // highlight is optional; here we just scroll to settings block
+          scrollToSection('mainSettings');
+        },
+      },
+      {
+        key: 'audioVideo',
+        title: t('settings.audio_video') || 'Audio & Video',
+        keywords: ['audio', 'video', 'quality', 'captions', 'background'],
+        action: () => setActiveModal('audioVideo'),
+      },
+      {
+        key: 'playback',
+        title: t('settings.playback') || 'Playback',
+        keywords: ['playback', 'repeat', 'speed', 'normalize', 'crossfade'],
+        action: () => setActiveModal('playback'),
+      },
+      {
+        key: 'dataSaver',
+        title: t('settings.data_saver') || 'Data Saver & Storage',
+        keywords: ['data', 'wifi', 'download', 'storage', 'images'],
+        action: () => setActiveModal('dataSaver'),
+      },
+      {
+        key: 'security',
+        title: t('settings.security') || 'Security',
+        keywords: ['security', 'password', 'lock', 'privacy', 'email'],
+        action: () => setActiveModal('security'),
+      },
+      {
+        key: 'subscription',
+        title: t('settings.subscription_settings') || 'Subscription Settings',
+        keywords: ['subscription', 'premium', 'package', 'billing', 'plan'],
+        action: () => setActiveModal('subscription'),
+      },
+      {
+        key: 'language',
+        title: t('settings.language') || 'Language',
+        keywords: ['language', 'fr', 'en', 'yo', 'es', 'fon', 'gou'],
+        action: () => setLanguageModalVisible(true),
+      },
+      {
+        key: 'darkMode',
+        title: t('settings.darkMode') || 'Dark Mode',
+        keywords: ['dark', 'theme', 'mode'],
+        action: () => scrollToSection('mainSettings'),
+      },
+      {
+        key: 'privacyPolicy',
+        title: t('settings.privacyPolicy') || 'Privacy Policy',
+        keywords: ['privacy', 'policy'],
+        action: () => showAlert(t('settings.privacyPolicyText') || 'Privacy policy details...'),
+      },
+      {
+        key: 'aboutApp',
+        title: t('settings.aboutApp') || 'About App',
+        keywords: ['about', 'app', 'version'],
+        action: () => showAlert(t('settings.aboutAppText') || 'About app details...'),
+      },
+      {
+        key: 'logout',
+        title: t('settings.logout') || 'Logout',
+        keywords: ['logout', 'sign out'],
+        action: () => confirmLogout(),
+      },
+    ];
+
+    return items;
+  }, [t, navigation, confirmLogout, isDark]);
+
+  const filteredSearch = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return searchIndex.filter(it => {
+      const hay = `${it.title} ${it.keywords.join(' ')}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [searchQuery, searchIndex]);
+
+  const scrollToSection = (key: 'mainSettings' | 'otherLinks') => {
+    const node = sectionRefs.current[key];
+    if (!node) return;
+    // measureLayout requires a parent ref; simplest is scrollToTop-ish with small delays
+    node.measureLayout(
+      // @ts-ignore
+      scrollRef.current?.getInnerViewNode ? scrollRef.current.getInnerViewNode() : scrollRef.current,
+      (_x: number, y: number) => {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - 10), animated: true });
+      },
+      () => {},
+    );
+  };
+
+  // ================== FIXED TOP UI ==================
+  const heroBg = isDark ? HERO_BG_DARK : HERO_BG_LIGHT;
+  const heroText = isDark ? HERO_TEXT_DARK : HERO_TEXT_LIGHT;
+  const heroIconBg = isDark ? HERO_ICON_BG_DARK : HERO_ICON_BG_LIGHT;
+
+  const premiumLabel = useMemo(() => {
+    // prefer your real subscription row
+    if (loadingSub) return t('settings.loading') || 'Loading...';
+    if (userSubRow) {
+      const st = String(userSubRow.status || '').toLowerCase();
+      const name = userSubRow.packageName || (t('settings.free_plan') || 'Free Plan');
+      if (st === 'active') return name;
+      if (st === 'pending') return `${name} · ${t('settings.pending') || 'Pending'}`;
+      if (st === 'cancelled') return `${name} · ${t('settings.canceled') || 'Canceled'}`;
+      return `${name} · ${t('settings.inactive') || 'Inactive'}`;
+    }
+    return t('settings.free_plan') || 'Free Plan';
+  }, [userSubRow, loadingSub, t]);
+
+  const toggleHeader = () => {
+    const next = !headerExpanded;
+    setHeaderExpanded(next);
+    setSearchOpen(next ? searchOpen : false);
+    setHeaderHeight(next ? HERO_EXPANDED : HERO_COLLAPSED);
+  };
+
+  const openSearch = () => {
+    setHeaderExpanded(true);
+    setHeaderHeight(HERO_EXPANDED);
+    setSearchOpen(true);
+    setTimeout(() => {}, 50);
+  };
 
   if (hydrating) {
     return (
@@ -451,108 +779,265 @@ const Settings = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.topHeader}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>{t('settings.profile_title') || 'Profile'}</Text>
+      {/* ================= FIXED TOP (stays on top) ================= */}
+      <View
+        style={[
+          fixedHero.heroContainer,
+          {
+            height: headerHeight,
+            backgroundColor: heroBg,
+            borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+          },
+        ]}
+      >
+        <View style={fixedHero.heroPinnedTop}>
+          <View style={fixedHero.heroTopLeft}>
+            <View style={[fixedHero.heroIcon, { backgroundColor: heroIconBg }]}>
+              <Ionicons name="settings-outline" size={18} color={heroText} />
+            </View>
 
-          <TouchableOpacity
-            style={[
-              styles.headerMenuBtn,
-              { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F2F3F5' },
-            ]}
-            onPress={() => setActiveModal('moreOptions')}
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color={textColor} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Profile summary */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarWrap}>
-            <Image
-              source={{ uri: userProfile?.photoURL || 'https://i.pravatar.cc/300?img=11' }}
-              style={styles.avatar}
-            />
-            <TouchableOpacity
-              style={[styles.avatarEdit, { backgroundColor: COLORS.light.primary }]}
-              onPress={() => navigation.navigate('Profile')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="create" size={14} color="#fff" />
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={[fixedHero.heroTitle, { color: heroText }]} numberOfLines={1}>
+                {t('settings.profile_title') || 'Profile'}
+              </Text>
+              {/* <Text style={[fixedHero.heroSub, { color: isDark ? 'rgba(237,237,237,0.65)' : 'rgba(6, 51, 37, 0.65)' }]} numberOfLines={1}>
+                {(t('settings.subtitle') || 'Account, playback & subscriptions')}
+              </Text> */}
+            </View>
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.profileName, { color: textColor }]} numberOfLines={1}>
-              {displayName}
-            </Text>
+          <View style={fixedHero.heroTopRight}>
+            <TouchableOpacity
+              style={[fixedHero.heroIcon, { backgroundColor: heroIconBg }]}
+              onPress={() => setActiveModal('moreOptions')}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color={heroText} />
+            </TouchableOpacity>
 
-            {!settings.security.hideEmail && (
-              <Text style={[styles.profileEmail, { color: subTextColor }]} numberOfLines={1}>
-                {displayEmail}
-              </Text>
-            )}
+            <TouchableOpacity
+              style={[fixedHero.heroIcon, { backgroundColor: heroIconBg }]}
+              onPress={openSearch}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="search" size={18} color={heroText} />
+            </TouchableOpacity>
 
-            <View style={styles.pillRow}>
-              <View
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: isPremium
-                      ? 'rgba(46, 204, 113, 0.14)'
-                      : isDark
-                        ? 'rgba(255,255,255,0.06)'
-                        : '#F2F3F5',
-                    borderColor: isPremium ? 'rgba(46, 204, 113, 0.32)' : 'transparent',
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={isPremium ? 'diamond' : 'lock-closed'}
-                  size={14}
-                  color={isPremium ? COLORS.light.primary : subTextColor}
+            <TouchableOpacity
+              style={[fixedHero.heroIcon, { backgroundColor: heroIconBg }]}
+              onPress={toggleHeader}
+              activeOpacity={0.9}
+            >
+              <Ionicons name={headerExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={heroText} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Profile + subscription summary (TOP CARD) */}
+        <View style={{ marginTop: 12 }}>
+          <View style={[fixedHero.topCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6', borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={fixedHero.avatarWrap}>
+                <Image
+                  source={{ uri: userProfile?.photoURL || 'https://i.pravatar.cc/300?img=11' }}
+                  style={fixedHero.avatar}
                 />
-                <Text style={[styles.pillText, { color: isPremium ? COLORS.light.primary : subTextColor }]}>
-                  {isPremium ? (t('settings.premium_active') || 'Premium Active') : (t('settings.free_plan') || 'Free Plan')}
+                <TouchableOpacity
+                  style={[fixedHero.avatarEdit, { backgroundColor: COLORS.light.primary }]}
+                  onPress={() => navigation.navigate('Profile')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={[fixedHero.name, { color: heroText }]} numberOfLines={1}>
+                  {displayName}
                 </Text>
+
+                {!settings.security.hideEmail && (
+                  <Text style={[fixedHero.email, { color: isDark ? 'rgba(237,237,237,0.70)' : 'rgba(6, 51, 37, 0.70)' }]} numberOfLines={1}>
+                    {displayEmail}
+                  </Text>
+                )}
+
+                {/* Plan row (fix overflow) */}
+                <View style={fixedHero.planRow}>
+                  <View
+                    style={[
+                      fixedHero.planPill,
+                      {
+                        backgroundColor: isPremiumReal
+                          ? 'rgba(46, 204, 113, 0.14)'
+                          : isDark
+                            ? 'rgba(255,255,255,0.08)'
+                            : 'rgba(255,255,255,0.92)',
+                        borderColor: isPremiumReal ? 'rgba(46, 204, 113, 0.32)' : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={isPremiumReal ? 'diamond' : 'lock-closed'}
+                      size={14}
+                      color={isPremiumReal ? COLORS.light.primary : (isDark ? '#EDEDED' : heroText)}
+                    />
+                    <Text
+                      style={[
+                        fixedHero.planText,
+                        { color: isPremiumReal ? COLORS.light.primary : (isDark ? '#EDEDED' : heroText) },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {premiumLabel}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => setActiveModal('subscription')}
+                    style={[
+                      fixedHero.manageBtn,
+                      {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.92)',
+                        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)',
+                      },
+                    ]}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="card-outline" size={16} color={heroText} />
+                    <Text style={[fixedHero.manageBtnText, { color: heroText }]} numberOfLines={1}>
+                      {t('settings.manage_subscription') || 'Manage'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Premium card */}
-        <View style={[styles.premiumCard, { backgroundColor: COLORS.light.primary }]}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={styles.premiumTitle}>{t('settings.enjoy_benefits') || 'Enjoy All Benefits!'}</Text>
-            <Text style={styles.premiumBody}>
-              {t('settings.premium_desc') ||
-                'Enjoy listening songs & podcasts with better audio quality, without restrictions, and without ads.'}
-            </Text>
+        {/* Expandable area: search + index chips */}
+        {headerExpanded && (
+          <View style={{ marginTop: 12 }}>
+            {/* Search bar */}
+            {searchOpen && (
+              <View style={[fixedHero.searchRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)' }]}>
+                <Ionicons name="search" size={16} color={isDark ? '#EDEDED' : 'rgba(6,51,37,0.75)'} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={t('settings.search') || 'Search settings'}
+                  placeholderTextColor={isDark ? 'rgba(237,237,237,0.55)' : 'rgba(6,51,37,0.45)'}
+                  style={[fixedHero.searchInput, { color: heroText }]}
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery('');
+                    setSearchOpen(false);
+                  }}
+                  style={[fixedHero.searchBtn, { backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.92)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons name="close" size={18} color={heroText} />
+                </TouchableOpacity>
+              </View>
+            )}
 
-            <TouchableOpacity
-              style={styles.premiumBtn}
-              activeOpacity={0.9}
-              onPress={() => setActiveModal('subscription')}
-            >
-              <Text style={[styles.premiumBtnText, { color: COLORS.light.primary }]}>
-                {t('settings.get_premium') || 'Get Premium'}
+            {/* Quick index chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={fixedHero.quickRow}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchOpen(false);
+                  setActiveModal('dataSaver')
+                }}
+                
+                style={[fixedHero.quickPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="cloud-download-outline" size={16} color={heroText} />
+                <Text style={[fixedHero.quickText, { color: heroText }]}>{t('settings.data_saver') || 'Data saver'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setActiveModal('audioVideo')}
+                style={[fixedHero.quickPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="mic-outline" size={16} color={heroText} />
+                <Text style={[fixedHero.quickText, { color: heroText }]}>{t('settings.audio_video') || 'Audio & Video'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setActiveModal('subscription')}
+                style={[fixedHero.quickPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="card-outline" size={16} color={heroText} />
+                <Text style={[fixedHero.quickText, { color: heroText }]}>{t('settings.subscription_settings') || 'Subscription'}</Text>
+              </TouchableOpacity>
+
+              
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
+      {/* ================= SCROLLING CONTENT (behind fixed header) ================= */}
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ paddingTop: headerHeight + 14, paddingBottom: 28 }}
+        showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="never"
+      >
+        {/* Search results card */}
+        {!!searchQuery.trim() && (
+          <View style={[styles.searchCard, { backgroundColor: cardColor }]}>
+            <View style={styles.searchHeader}>
+              <Text style={[styles.searchTitle, { color: textColor }]}>
+                {t('settings.search_results') || 'Search results'}
               </Text>
-            </TouchableOpacity>
-          </View>
+              <View style={[styles.badgeSoft, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6' }]}>
+                <Text style={[styles.badgeSoftText, { color: textColor }]}>
+                  {filteredSearch.length}
+                </Text>
+              </View>
+            </View>
 
-          <View style={styles.premiumArt}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1520975958225-29de2d06cfd3?auto=format&fit=crop&w=300&q=60',
-              }}
-              style={styles.premiumArtImg}
-            />
+            {filteredSearch.length ? (
+              <View style={{ marginTop: 10 }}>
+                {filteredSearch.map(it => (
+                  <TouchableOpacity
+                    key={it.key}
+                    onPress={() => {
+                      setSearchOpen(false);
+                      it.action();
+                    }}
+                    style={[styles.searchRow, { borderColor: dividerColor }]}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="arrow-forward-outline" size={18} color={subTextColor} />
+                    <Text style={[styles.searchRowText, { color: textColor }]} numberOfLines={1}>
+                      {it.title}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyBlock}>
+                <Ionicons name="search-outline" size={40} color={isDark ? 'rgba(237,237,237,0.35)' : '#C7C7CC'} />
+                <Text style={[styles.emptyTitle, { color: textColor }]}>{t('settings.no_results') || 'No results'}</Text>
+                <Text style={[styles.emptySub, { color: subTextColor }]}>
+                  {t('settings.no_results_sub') || 'Try another keyword.'}
+                </Text>
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
         {/* Settings list */}
-        <View style={[styles.listCard, { backgroundColor: cardColor }]}>
+        <View
+          ref={(r) => (sectionRefs.current.mainSettings = r)}
+          style={[styles.listCard, { backgroundColor: cardColor }]}
+        >
           <Row icon="person-outline" label={t('settings.profile') || 'Profile'} onPress={() => navigation.navigate('Profile')} />
 
           <Row
@@ -579,8 +1064,8 @@ const Settings = ({ navigation }: any) => {
             onPress={() => setActiveModal('subscription')}
             right={
               <View style={styles.valueRight}>
-                <Text style={[styles.valueText, { color: subTextColor }]}>
-                  {loadingSub ? (t('settings.loading') || 'Loading...') : isPremium ? (t('settings.premium') || 'Premium') : (t('settings.free') || 'Free')}
+                <Text style={[styles.valueText, { color: subTextColor }]} numberOfLines={1}>
+                  {loadingSub ? (t('settings.loading') || 'Loading...') : premiumLabel}
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={subTextColor} />
               </View>
@@ -593,7 +1078,9 @@ const Settings = ({ navigation }: any) => {
             onPress={() => setLanguageModalVisible(true)}
             right={
               <View style={styles.valueRight}>
-                <Text style={[styles.valueText, { color: subTextColor }]}>{languageLabel}</Text>
+                <Text style={[styles.valueText, { color: subTextColor }]} numberOfLines={1}>
+                  {languageLabel}
+                </Text>
                 <Ionicons name="chevron-forward" size={18} color={subTextColor} />
               </View>
             }
@@ -606,9 +1093,7 @@ const Settings = ({ navigation }: any) => {
               <Switch
                 value={isDark}
                 onValueChange={() => {
-                  // theme context switch
                   toggleTheme();
-                  // also persist preference for cross-device restore
                   updateSettings({ darkMode: !isDark });
                 }}
                 trackColor={{ false: '#CFCFCF', true: COLORS.light.primary }}
@@ -619,7 +1104,10 @@ const Settings = ({ navigation }: any) => {
         </View>
 
         {/* Other links */}
-        <View style={[styles.listCard, { backgroundColor: cardColor, marginTop: 14 }]}>
+        <View
+          ref={(r) => (sectionRefs.current.otherLinks = r)}
+          style={[styles.listCard, { backgroundColor: cardColor, marginTop: 14 }]}
+        >
           <Row
             icon="document-text-outline"
             label={t('settings.privacyPolicy') || 'Privacy Policy'}
@@ -633,7 +1121,7 @@ const Settings = ({ navigation }: any) => {
           <Row icon="log-out-outline" label={t('settings.logout') || 'Logout'} onPress={confirmLogout} danger />
         </View>
 
-        {/* Language Modal */}
+        {/* Language Modal (kept) */}
         <Modal
           visible={languageModalVisible}
           animationType="slide"
@@ -673,15 +1161,13 @@ const Settings = ({ navigation }: any) => {
                 ]}
                 onPress={() => setLanguageModalVisible(false)}
               >
-                <Text style={[styles.modalActionText, { color: textColor }]}>
-                  {t('common.close') || 'Close'}
-                </Text>
+                <Text style={[styles.modalActionText, { color: textColor }]}>{t('common.close') || 'Close'}</Text>
               </Pressable>
             </View>
           </View>
         </Modal>
 
-        {/* FULL-PAGE MODALS */}
+        {/* FULL-PAGE MODALS (kept) */}
         <AudioVideoModal
           visible={activeModal === 'audioVideo'}
           onClose={() => setActiveModal(null)}
@@ -726,7 +1212,41 @@ const Settings = ({ navigation }: any) => {
           subscription={subscription}
           loading={loadingSub}
           onRefresh={fetchSubscription}
-          onOpenPaywall={() => Alert.alert(t('settings.subscription') || 'Subscription', t('settings.paywall_placeholder') || 'Open your paywall here.')}
+          userSubRow={userSubRow}
+          onOpenPaywall={async () => {
+            // open package selection
+            if (!packages.length) await fetchPackages();
+            setActiveModal('packages');
+          }}
+        />
+
+        <PackageSelectionModal
+          visible={activeModal === 'packages'}
+          onClose={() => setActiveModal('subscription')}
+          isDark={isDark}
+          t={t}
+          packages={packages}
+          loading={loadingPackages}
+          onRefresh={fetchPackages}
+          current={userSubRow}
+          onSelect={(pkg: SubscriptionPackage) => {
+            setSelectedPackage(pkg);
+            setActiveModal('payment');
+          }}
+        />
+
+        <PaymentModal
+          visible={activeModal === 'payment'}
+          onClose={() => setActiveModal('packages')}
+          isDark={isDark}
+          t={t}
+          pkg={selectedPackage}
+          provider={paymentProvider}
+          setProvider={setPaymentProvider}
+          method={paymentMethod}
+          setMethod={setPaymentMethod}
+          busy={payBusy}
+          onPay={createPendingSubscription}
         />
 
         <MoreOptionsModal
@@ -744,7 +1264,7 @@ const Settings = ({ navigation }: any) => {
 
 export default Settings;
 
-/* ---------------- FULL PAGE MODALS ---------------- */
+/* ---------------- FULL PAGE SHELL (kept) ---------------- */
 
 const FullPageShell = ({
   visible,
@@ -790,7 +1310,7 @@ const FullPageShell = ({
           <View style={{ width: 44, alignItems: 'flex-end' }}>{right || null}</View>
         </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
           <View style={[modalStyles.card, { backgroundColor: card }]}>{children}</View>
         </ScrollView>
       </SafeAreaView>
@@ -852,6 +1372,9 @@ const modalStyles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
   },
   primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   dangerBtn: {
@@ -864,14 +1387,9 @@ const modalStyles = StyleSheet.create({
   dangerBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
 });
 
-const AudioVideoModal = ({
-  visible,
-  onClose,
-  settings,
-  onChange,
-  isDark,
-  t,
-}: any) => {
+/* ===================== EXISTING MODALS (your originals, unchanged logic) ===================== */
+
+const AudioVideoModal = ({ visible, onClose, settings, onChange, isDark, t }: any) => {
   const text = isDark ? Colors.textDark : '#111';
   const sub = isDark ? '#B8B8B8' : '#777';
   const divider = isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF';
@@ -896,9 +1414,7 @@ const AudioVideoModal = ({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[modalStyles.rowTitle, { color: text }]}>{t('settings.audio_quality') || 'Audio quality'}</Text>
-            <Text style={[modalStyles.rowDesc, { color: sub }]}>
-              {t('settings.audio_quality_desc') || 'Controls streaming audio quality'}
-            </Text>
+            <Text style={[modalStyles.rowDesc, { color: sub }]}>{t('settings.audio_quality_desc') || 'Controls streaming audio quality'}</Text>
           </View>
         </View>
       </View>
@@ -915,9 +1431,7 @@ const AudioVideoModal = ({
                 { backgroundColor: active ? COLORS.light.primary : isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
               ]}
             >
-              <Text style={[modalStyles.chipText, { color: active ? '#fff' : text }]}>
-                {t(`settings.audio_quality_${v}`) || v.toUpperCase()}
-              </Text>
+              <Text style={[modalStyles.chipText, { color: active ? '#fff' : text }]}>{t(`settings.audio_quality_${v}`) || v.toUpperCase()}</Text>
             </TouchableOpacity>
           );
         })}
@@ -930,9 +1444,7 @@ const AudioVideoModal = ({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[modalStyles.rowTitle, { color: text }]}>{t('settings.video_quality') || 'Video quality'}</Text>
-            <Text style={[modalStyles.rowDesc, { color: sub }]}>
-              {t('settings.video_quality_desc') || 'Controls streaming video quality'}
-            </Text>
+            <Text style={[modalStyles.rowDesc, { color: sub }]}>{t('settings.video_quality_desc') || 'Controls streaming video quality'}</Text>
           </View>
         </View>
       </View>
@@ -1015,7 +1527,12 @@ const AudioVideoModal = ({
 
       <TouchableOpacity
         style={modalStyles.primaryBtn}
-        onPress={() => Alert.alert(t('common.info') || 'Info', t('settings.applied_globally_hint') || 'These preferences are saved. Apply them inside your player and feeds.')}
+        onPress={() =>
+          Alert.alert(
+            t('common.info') || 'Info',
+            t('settings.applied_globally_hint') || 'These preferences are saved. Apply them inside your player and feeds.',
+          )
+        }
       >
         <Text style={modalStyles.primaryBtnText}>{t('settings.how_it_works') || 'How it works'}</Text>
       </TouchableOpacity>
@@ -1083,9 +1600,7 @@ const PlaybackModal = ({ visible, onClose, settings, onChange, isDark, t }: any)
                 { backgroundColor: active ? COLORS.light.primary : isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
               ]}
             >
-              <Text style={[modalStyles.chipText, { color: active ? '#fff' : text }]}>
-                {t(`settings.repeat_${v}`) || v.toUpperCase()}
-              </Text>
+              <Text style={[modalStyles.chipText, { color: active ? '#fff' : text }]}>{t(`settings.repeat_${v}`) || v.toUpperCase()}</Text>
             </TouchableOpacity>
           );
         })}
@@ -1148,7 +1663,6 @@ const PlaybackModal = ({ visible, onClose, settings, onChange, isDark, t }: any)
         />
       </View>
 
-      {/* Crossfade (simple stepper) */}
       <View style={[modalStyles.row, { borderTopColor: divider }]}>
         <View style={modalStyles.rowLeft}>
           <View style={[modalStyles.iconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' }]}>
@@ -1164,18 +1678,14 @@ const PlaybackModal = ({ visible, onClose, settings, onChange, isDark, t }: any)
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <TouchableOpacity
-            onPress={() =>
-              onChange({ playback: { crossfadeSeconds: clamp(settings.playback.crossfadeSeconds - 1, 0, 12) } })
-            }
+            onPress={() => onChange({ playback: { crossfadeSeconds: clamp(settings.playback.crossfadeSeconds - 1, 0, 12) } })}
             style={{ padding: 10 }}
           >
             <Ionicons name="remove-circle-outline" size={22} color={text} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() =>
-              onChange({ playback: { crossfadeSeconds: clamp(settings.playback.crossfadeSeconds + 1, 0, 12) } })
-            }
+            onPress={() => onChange({ playback: { crossfadeSeconds: clamp(settings.playback.crossfadeSeconds + 1, 0, 12) } })}
             style={{ padding: 10 }}
           >
             <Ionicons name="add-circle-outline" size={22} color={text} />
@@ -1291,7 +1801,12 @@ const DataSaverModal = ({ visible, onClose, settings, onChange, isDark, t }: any
 
       <TouchableOpacity
         style={modalStyles.primaryBtn}
-        onPress={() => Alert.alert(t('common.info') || 'Info', t('settings.data_saver_hint') || 'Apply these flags in your fetch logic and media player (e.g., force low quality when Low Data Mode is enabled).')}
+        onPress={() =>
+          Alert.alert(
+            t('common.info') || 'Info',
+            t('settings.data_saver_hint') || 'Apply these flags in your fetch logic and media player (e.g., force low quality when Low Data Mode is enabled).',
+          )
+        }
       >
         <Text style={modalStyles.primaryBtnText}>{t('settings.how_it_works') || 'How it works'}</Text>
       </TouchableOpacity>
@@ -1356,7 +1871,7 @@ const SecurityModal = ({ visible, onClose, settings, onChange, isDark, t }: any)
             <Ionicons name="eye-off" size={18} color={text} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[modalStyles.rowTitle, { color: text }]}>{t('settings.hide_email') || 'Hide email on profile'}</Text>
+            <Text style={[modalStyles.rowTitle, { color: text }]}>{t('settings.hide_email') || 'Hide email on profile header'}</Text>
             <Text style={[modalStyles.rowDesc, { color: sub }]}>{t('settings.hide_email_desc') || 'Prevent showing email on profile header'}</Text>
           </View>
         </View>
@@ -1427,7 +1942,17 @@ const SecurityModal = ({ visible, onClose, settings, onChange, isDark, t }: any)
   );
 };
 
-const SubscriptionModal = ({ visible, onClose, isDark, t, subscription, loading, onRefresh, onOpenPaywall }: any) => {
+const SubscriptionModal = ({
+  visible,
+  onClose,
+  isDark,
+  t,
+  subscription,
+  loading,
+  onRefresh,
+  onOpenPaywall,
+  userSubRow,
+}: any) => {
   const text = isDark ? Colors.textDark : '#111';
   const sub = isDark ? '#B8B8B8' : '#777';
   const divider = isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF';
@@ -1436,7 +1961,14 @@ const SubscriptionModal = ({ visible, onClose, isDark, t, subscription, loading,
   const status = subscription?.status || 'inactive';
 
   const planLabel =
-    plan === 'pro' ? (t('settings.pro') || 'Pro') : plan === 'premium' ? (t('settings.premium') || 'Premium') : (t('settings.free') || 'Free');
+    plan === 'pro'
+      ? (t('settings.pro') || 'Pro')
+      : plan === 'premium'
+        ? (t('settings.premium') || 'Premium')
+        : (t('settings.free') || 'Free');
+
+  const realName = userSubRow?.packageName || planLabel;
+  const realStatus = String(userSubRow?.status || status);
 
   return (
     <FullPageShell
@@ -1451,6 +1983,7 @@ const SubscriptionModal = ({ visible, onClose, isDark, t, subscription, loading,
         </TouchableOpacity>
       }
     >
+      {/* Current package */}
       <View style={[modalStyles.row, { borderTopColor: divider }]}>
         <View style={modalStyles.rowLeft}>
           <View style={[modalStyles.iconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' }]}>
@@ -1462,13 +1995,10 @@ const SubscriptionModal = ({ visible, onClose, isDark, t, subscription, loading,
           </View>
         </View>
 
-        {loading ? (
-          <ActivityIndicator color={COLORS.light.primary} />
-        ) : (
-          <Text style={{ color: COLORS.light.primary, fontWeight: '900' }}>{planLabel}</Text>
-        )}
+        {loading ? <ActivityIndicator color={COLORS.light.primary} /> : <Text style={{ color: COLORS.light.primary, fontWeight: '900' }}>{realName}</Text>}
       </View>
 
+      {/* Status */}
       <View style={[modalStyles.row, { borderTopColor: divider }]}>
         <View style={modalStyles.rowLeft}>
           <View style={[modalStyles.iconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' }]}>
@@ -1483,22 +2013,251 @@ const SubscriptionModal = ({ visible, onClose, isDark, t, subscription, loading,
         {loading ? (
           <ActivityIndicator color={COLORS.light.primary} />
         ) : (
-          <Text style={{ color: status === 'active' ? '#2ECC71' : sub, fontWeight: '900' }}>
-            {t(`settings.sub_status_${status}`) || status.toUpperCase()}
+          <Text
+            style={{
+              color:
+                String(realStatus).toLowerCase() === 'active'
+                  ? '#2ECC71'
+                  : String(realStatus).toLowerCase() === 'pending'
+                    ? '#F59E0B'
+                    : sub,
+              fontWeight: '900',
+            }}
+          >
+            {t(`settings.sub_status_${String(realStatus).toLowerCase()}`) || String(realStatus).toUpperCase()}
           </Text>
         )}
       </View>
 
-      <TouchableOpacity style={modalStyles.primaryBtn} onPress={onOpenPaywall}>
+      {/* Manage subscription (fixed, no overflow) */}
+      <TouchableOpacity style={modalStyles.primaryBtn} onPress={onOpenPaywall} activeOpacity={0.9}>
+        <Ionicons name="pricetags-outline" size={18} color="#fff" />
         <Text style={modalStyles.primaryBtnText}>{t('settings.manage_subscription') || 'Manage subscription'}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={[modalStyles.primaryBtn, { backgroundColor: '#111' }]}
         onPress={() => Alert.alert(t('settings.coming_soon') || 'Coming soon', t('settings.billing_history_desc') || 'Add billing history screen here.')}
+        activeOpacity={0.9}
       >
         <Text style={modalStyles.primaryBtnText}>{t('settings.billing_history') || 'Billing history'}</Text>
       </TouchableOpacity>
+    </FullPageShell>
+  );
+};
+
+const PackageSelectionModal = ({
+  visible,
+  onClose,
+  isDark,
+  t,
+  packages,
+  loading,
+  onRefresh,
+  current,
+  onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  isDark: boolean;
+  t: any;
+  packages: SubscriptionPackage[];
+  loading: boolean;
+  onRefresh: () => void;
+  current: UserSubscriptionRow | null;
+  onSelect: (pkg: SubscriptionPackage) => void;
+}) => {
+  const text = isDark ? Colors.textDark : '#111';
+  const sub = isDark ? '#B8B8B8' : '#777';
+  const divider = isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF';
+
+  return (
+    <FullPageShell
+      visible={visible}
+      onClose={onClose}
+      isDark={isDark}
+      title={t('settings.packages') || 'Packages'}
+      subtitle={t('settings.packages_sub') || 'Choose a subscription package'}
+      right={
+        <TouchableOpacity onPress={onRefresh} style={{ padding: 10 }}>
+          <Ionicons name="refresh" size={20} color={text} />
+        </TouchableOpacity>
+      }
+    >
+      <View style={[styles.pkgHint, { borderColor: divider, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F4F6' }]}>
+        <Ionicons name="information-circle-outline" size={18} color={text} />
+        <Text style={{ color: sub, fontWeight: '800', flex: 1 }}>
+          {t('settings.packages_hint') || 'Select a package to continue to payment.'}
+        </Text>
+      </View>
+
+      {loading ? (
+        <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+          <ActivityIndicator color={COLORS.light.primary} />
+          <Text style={{ marginTop: 8, color: sub, fontWeight: '700' }}>{t('settings.loading') || 'Loading...'}</Text>
+        </View>
+      ) : packages?.length ? (
+        <View style={{ marginTop: 10 }}>
+          {packages.map(p => {
+            const isCurrent = current?.packageId === p.id && String(current?.status || '').toLowerCase() === 'active';
+            return (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => onSelect(p)}
+                activeOpacity={0.9}
+                style={[styles.pkgRow, { borderColor: divider, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff' }]}
+              >
+                <View style={[styles.pkgIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' }]}>
+                  <Ionicons name="diamond-outline" size={18} color={text} />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: text, fontWeight: '900', fontSize: 15 }} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text style={{ color: sub, fontWeight: '800', marginTop: 3 }} numberOfLines={1}>
+                    {t('settings.duration') || 'Duration'}: {p.durationDays} {t('settings.days') || 'days'} · {t('settings.price') || 'Price'}: {p.price}
+                  </Text>
+                </View>
+
+                {isCurrent ? (
+                  <View style={[styles.badgeSolidMini, { backgroundColor: 'rgba(46,204,113,0.16)', borderColor: 'rgba(46,204,113,0.32)' }]}>
+                    <Text style={{ color: '#2ECC71', fontWeight: '900', fontSize: 12 }}>{t('settings.active') || 'Active'}</Text>
+                  </View>
+                ) : (
+                  <Ionicons name="chevron-forward" size={18} color={sub} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={styles.emptyBlock}>
+          <Ionicons name="pricetags-outline" size={44} color={isDark ? 'rgba(237,237,237,0.35)' : '#C7C7CC'} />
+          <Text style={[styles.emptyTitle, { color: text }]}>{t('settings.no_packages') || 'No active packages'}</Text>
+          <Text style={[styles.emptySub, { color: sub }]}>{t('settings.no_packages_sub') || 'Create packages in subscription_packages.'}</Text>
+        </View>
+      )}
+    </FullPageShell>
+  );
+};
+
+const PaymentModal = ({
+  visible,
+  onClose,
+  isDark,
+  t,
+  pkg,
+  provider,
+  setProvider,
+  method,
+  setMethod,
+  busy,
+  onPay,
+}: any) => {
+  const text = isDark ? Colors.textDark : '#111';
+  const sub = isDark ? '#B8B8B8' : '#777';
+  const divider = isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF';
+
+  return (
+    <FullPageShell
+      visible={visible}
+      onClose={onClose}
+      isDark={isDark}
+      title={t('settings.payment') || 'Payment'}
+      subtitle={t('settings.payment_sub') || 'Choose provider and method'}
+    >
+      {!pkg ? (
+        <View style={styles.emptyBlock}>
+          <Ionicons name="alert-circle-outline" size={44} color={sub} />
+          <Text style={[styles.emptyTitle, { color: text }]}>{t('settings.no_package_selected') || 'No package selected'}</Text>
+          <Text style={[styles.emptySub, { color: sub }]}>{t('settings.no_package_selected_sub') || 'Go back and choose a package.'}</Text>
+        </View>
+      ) : (
+        <>
+          <View style={[styles.payCard, { borderColor: divider, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' }]}>
+            <Text style={{ color: text, fontWeight: '900', fontSize: 16 }} numberOfLines={1}>
+              {pkg.name}
+            </Text>
+            <Text style={{ color: sub, fontWeight: '800', marginTop: 6 }}>
+              {t('settings.price') || 'Price'}: {pkg.price} · {t('settings.duration') || 'Duration'}: {pkg.durationDays} {t('settings.days') || 'days'}
+            </Text>
+          </View>
+
+          <Text style={[modalStyles.sectionTitle, { color: text }]}>{t('settings.payment_provider') || 'Payment provider'}</Text>
+
+          <View style={modalStyles.chipRow}>
+            <TouchableOpacity
+              onPress={() => setProvider('mtn_celtis')}
+              style={[
+                modalStyles.chip,
+                { backgroundColor: provider === 'mtn_celtis' ? COLORS.light.primary : isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
+              ]}
+            >
+              <Text style={[modalStyles.chipText, { color: provider === 'mtn_celtis' ? '#fff' : text }]}>
+                {t('settings.mtn_celtis') || 'MTN Celtis'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setProvider('momo')}
+              style={[
+                modalStyles.chip,
+                { backgroundColor: provider === 'momo' ? COLORS.light.primary : isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
+              ]}
+            >
+              <Text style={[modalStyles.chipText, { color: provider === 'momo' ? '#fff' : text }]}>
+                {t('settings.momo') || 'MoMo'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[modalStyles.sectionTitle, { color: text }]}>{t('settings.payment_method') || 'Payment method'}</Text>
+
+          <View style={modalStyles.chipRow}>
+            <TouchableOpacity
+              onPress={() => setMethod('mobile')}
+              style={[
+                modalStyles.chip,
+                { backgroundColor: method === 'mobile' ? COLORS.light.primary : isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
+              ]}
+            >
+              <Text style={[modalStyles.chipText, { color: method === 'mobile' ? '#fff' : text }]}>
+                {t('settings.mobile_payment') || 'Mobile'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setMethod('card')}
+              style={[
+                modalStyles.chip,
+                { backgroundColor: method === 'card' ? COLORS.light.primary : isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' },
+              ]}
+            >
+              <Text style={[modalStyles.chipText, { color: method === 'card' ? '#fff' : text }]}>
+                {t('settings.bank_card') || 'Bank card'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.payHint, { borderColor: divider }]}>
+            <Ionicons name="information-circle-outline" size={18} color={text} />
+            <Text style={{ color: sub, fontWeight: '800', flex: 1 }}>
+              {t('settings.payment_hint') || 'Payment API will be added later. For now this creates a pending subscription row in Firestore.'}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[modalStyles.primaryBtn, busy && { opacity: 0.7 }]}
+            onPress={onPay}
+            disabled={busy}
+            activeOpacity={0.9}
+          >
+            {busy ? <ActivityIndicator color="#fff" /> : <Ionicons name="lock-closed-outline" size={18} color="#fff" />}
+            <Text style={modalStyles.primaryBtnText}>{t('settings.pay_now') || 'Pay now'}</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </FullPageShell>
   );
 };
@@ -1570,7 +2329,7 @@ const MoreOptionsModal = ({ visible, onClose, isDark, t, onShare, onSupport }: a
             <Ionicons name="chevron-forward" size={18} color={sub} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.modalAction, { marginTop: 14 }]} onPress={onClose}>
+          <TouchableOpacity style={[styles.modalAction, { marginTop: 14, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F2F3F5' }]} onPress={onClose}>
             <Text style={[styles.modalActionText, { color: text }]}>{t('common.close') || 'Close'}</Text>
           </TouchableOpacity>
         </Pressable>
@@ -1593,130 +2352,136 @@ const sheetRowStyles = StyleSheet.create({
   desc: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
 });
 
-/* ---------------- MAIN STYLES ---------------- */
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-
-  topHeader: {
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 10,
+/* ===================== FIXED HERO STYLES ===================== */
+const fixedHero = StyleSheet.create({
+  heroContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    paddingTop: Platform.select({ ios: 10, android: 10 }),
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderBottomLeftRadius: HERO_RADIUS,
+    borderBottomRightRadius: HERO_RADIUS,
+    overflow: 'hidden',
+    elevation: 6,
+    zIndex: 50,
+    borderBottomWidth: 1,
+  },
+  heroPinnedTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  headerMenuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  heroTopLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  heroTopRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+  heroIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  profileCard: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+  heroTitle: { fontSize: 20, fontWeight: '900' },
+  heroSub: { marginTop: 4, fontWeight: '800', fontSize: 12.5 },
+
+  topCard: {
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1,
   },
+
   avatarWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
   },
   avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
   },
   avatarEdit: {
     position: 'absolute',
     right: -2,
     bottom: -2,
-    width: 26,
-    height: 26,
+    width: 24,
+    height: 24,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#fff',
   },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  profileEmail: {
-    fontSize: 14,
-    marginTop: 2,
-  },
 
-  pillRow: { marginTop: 10, flexDirection: 'row' },
-  pill: {
+  name: { fontSize: 16.5, fontWeight: '900' },
+  email: { marginTop: 2, fontSize: 12.5, fontWeight: '800' },
+
+  planRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  planPill: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
   },
-  pillText: {
-    fontSize: 12,
-    fontWeight: '700',
+  planText: { fontSize: 12, fontWeight: '900', flex: 1 },
+
+  manageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  manageBtnText: { fontWeight: '900', fontSize: 12 },
+
+  searchRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontWeight: '900' },
+  searchBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
 
-  premiumCard: {
-    marginTop: 10,
-    marginHorizontal: 18,
-    borderRadius: 22,
-    padding: 18,
+  quickRow: { paddingTop: 10, gap: 10, paddingRight: 14 },
+  quickPill: {
     flexDirection: 'row',
-    overflow: 'hidden',
     alignItems: 'center',
-  },
-  premiumTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '900',
-    marginBottom: 6,
-  },
-  premiumBody: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 13.5,
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  premiumBtn: {
-    backgroundColor: '#fff',
-    alignSelf: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    paddingHorizontal: 18,
     borderRadius: 999,
+    borderWidth: 1,
   },
-  premiumBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  premiumArt: {
-    width: 92,
-    height: 110,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  premiumArtImg: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
+  quickText: { fontWeight: '900' },
+});
+
+/* ===================== MAIN STYLES ===================== */
+const styles = StyleSheet.create({
+  container: { flex: 1 },
 
   listCard: {
     marginTop: 16,
@@ -1757,10 +2522,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    maxWidth: 200,
   },
   valueText: {
     fontSize: 14,
     fontWeight: '700',
+    maxWidth: 160,
   },
 
   modalOverlay: {
@@ -1807,10 +2574,64 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: '#F2F3F5',
   },
   modalActionText: {
     fontSize: 15.5,
     fontWeight: '800',
   },
+
+  // Search results
+  searchCard: {
+    marginTop: 12,
+    marginHorizontal: 18,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#EEF0F3',
+  },
+  searchHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  searchTitle: { fontSize: 15.5, fontWeight: '900' },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  searchRowText: { fontWeight: '900', flex: 1 },
+
+  badgeSoft: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#F3F4F6' },
+  badgeSoftText: { fontSize: 11, fontWeight: '900' },
+
+  emptyBlock: { padding: 18, alignItems: 'center' },
+  emptyTitle: { marginTop: 10, fontSize: 16, fontWeight: '900' },
+  emptySub: { marginTop: 6, fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
+
+  // Packages
+  pkgHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+  },
+  pkgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  pkgIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  badgeSolidMini: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+
+  // Payment
+  payCard: { borderWidth: 1, borderRadius: 16, padding: 12 },
+  payHint: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 16, padding: 12 },
 });

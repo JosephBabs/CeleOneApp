@@ -312,6 +312,49 @@
     "saved": "Saved"
   },
   "settings": {
+    "search": "Search settings",
+"search_results": "Search results",
+"no_results": "No results",
+"no_results_sub": "Try another keyword.",
+"settings": "Settings",
+"more": "More",
+"subtitle": "Account, playback & subscriptions",
+
+"packages": "Packages",
+"packages_sub": "Choose a subscription package",
+"packages_hint": "Select a package to continue to payment.",
+"no_packages": "No active packages",
+"no_packages_sub": "Create packages in subscription_packages.",
+
+"duration": "Duration",
+"days": "days",
+"price": "Price",
+"active": "Active",
+"inactive": "Inactive",
+"pending": "Pending",
+"canceled": "Canceled",
+
+"payment": "Payment",
+"payment_sub": "Choose provider and method",
+"payment_provider": "Payment provider",
+"payment_method": "Payment method",
+"mobile_payment": "Mobile payment",
+"bank_card": "Bank card",
+"pay_now": "Pay now",
+"payment_hint": "Payment API will be added later. For now this creates a pending subscription row in Firestore.",
+"payment_pending": "Payment initialized. Waiting for confirmation.",
+"payment_failed": "Payment failed",
+
+"mtn_celtis": "MTN Celtis",
+"momo": "MoMo",
+
+"no_user": "You must be logged in.",
+"loading_packages": "Loading packages...",
+"no_package_selected": "No package selected",
+"no_package_selected_sub": "Go back and choose a package.",
+
+"sub_status_pending": "PENDING"
+,
     "loading": "Loading...",
     "profile_title": "Profile",
     "notification": "Notification",
@@ -496,6 +539,163 @@
     "invalidCurrentPassword": "Invalid current password",
     "weakNewPassword": "The new password is too weak"
   },
+
+
+   "media": {
+    "screenTitle": "Films & Music",
+    "screenSubtitle": "Search · Tags · Playlists · Offline",
+
+    "tabs": {
+      "forYou": "For you",
+      "music": "Music",
+      "filmsSeries": "Films/Series"
+    },
+
+    "search": {
+      "placeholder": "Search a film, a song, an artist…",
+      "allTags": "All"
+    },
+
+    "quick": {
+      "favorites": "Favorites",
+      "offline": "Offline",
+      "playlists": "Playlists",
+      "manageSubscription": "Manage subscription",
+      "subscribe": "Subscribe"
+    },
+
+    "subscription": {
+      "requiredTitle": "Subscription required",
+      "cancel": "Cancel",
+      "viewOffers": "View plans",
+      "active": "Active",
+      "inactive": "Inactive",
+      "free": "Free",
+      "activeHint": "Active subscription{{pkg}}. Streaming unlocked.",
+      "inactiveHint": "Without a subscription, streaming is locked. Subscribe to watch/listen.",
+      "pkgFormat": " ({{name}})",
+      "expiringTitle": "Subscription expiring soon",
+      "expiringMsg": "You have about {{days}} day(s) left. Consider renewing.",
+      "expiredTitle": "Subscription expired",
+      "expiredMsg": "Your subscription has expired. Renew to keep watching."
+    },
+
+    "settingsActive": {
+      "title": "Active settings:",
+      "wifiOnly": "Wi-Fi only",
+      "dataSaver": "Data saver",
+      "reducedImages": "Reduced images"
+    },
+
+    "network": {
+      "title": "Connection",
+      "noInternet": "No Internet connection."
+    },
+
+    "badges": {
+      "premium": "Premium",
+      "free": "FREE"
+    },
+
+    "counts": {
+      "plays": "{{count}} plays",
+      "views": "{{count}} views",
+      "videosCount": "{{count}} videos",
+      "tracksCount": "{{count}} tracks",
+      "featured": "Featured"
+    },
+
+    "labels": {
+      "unknownTitle": "Unknown Title",
+      "unknownArtist": "Unknown Artist",
+      "untitled": "Untitled",
+      "channel": "Channel",
+      "recently": "Recently",
+      "music": "Music",
+      "seriesEpisodes": "Series • Episodes",
+      "episodes": "Episodes",
+      "noDescription": "No description available.",
+      "noDescriptionShort": "No description."
+    },
+
+    "locks": {
+      "subscriptionRequired": "Subscription required",
+      "locked": "Locked",
+      "streamingLocked": "Streaming locked · Subscribe to watch."
+    },
+
+    "actionsSheet": {
+      "title": "Actions",
+      "addToFavorites": "Add to favorites",
+      "removeFromFavorites": "Remove from favorites",
+      "addOffline": "Add Offline",
+      "removeOffline": "Remove Offline",
+      "addToPlaylist": "Add to a playlist",
+      "createPlaylist": "Create a playlist",
+      "alreadyInPlaylist": "Already in this playlist.",
+      "addedToPlaylist": "Added to playlist.",
+      "errorAddPlaylist": "Couldn't add to playlist.",
+      "errorUpdateFavorites": "Couldn't update favorites.",
+      "errorUpdateOffline": "Couldn't update Offline."
+    },
+
+    "playlist": {
+      "title": "Playlists",
+      "yourPlaylists": "Your playlists",
+      "newTitle": "New playlist",
+      "namePlaceholder": "Playlist name",
+      "create": "Create",
+      "open": "Open",
+      "items": "Items",
+      "emptyPlaylists": "No playlist",
+      "emptyItems": "No item",
+      "enterName": "Enter a playlist name.",
+      "createError": "Couldn't create playlist."
+    },
+
+    "bottomSheet": {
+      "browse": "Browse",
+      "favorites": "Your favorites",
+      "downloads": "Offline",
+      "library": "Playlists",
+      "shortcuts": "Shortcuts",
+      "mediaSettings": "Media settings",
+      "emptyFavorites": "No favorites",
+      "emptyOffline": "No Offline item"
+    },
+
+    "player": {
+      "audioTitle": "Audio player",
+      "videoTitle": "Video",
+      "noAudioLink": "This track has no audio link.",
+      "noVideoLink": "No video link",
+      "cannotPlayAudio": "Unable to play this audio.",
+      "cannotPlayVideo": "Unable to play this video.",
+      "episodeNoLink": "No video link for this episode.",
+      "shareTitle": "Share",
+      "shareFallback": "Share is not available on this device.",
+      "shareNothing": "Nothing to share.",
+      "subscribeToListen": "Subscribe to listen to music.",
+      "subscribeToWatch": "Subscribe to watch films/series.",
+      "subscribeBtn": "Subscribe",
+      "play": "Play",
+      "like": "Like",
+      "favorite": "Favorite",
+      "offline": "Offline",
+      "playlist": "Playlist",
+      "watch": "Watch",
+      "watchSeries": "Play series",
+      "watchVideo": "Play"
+    },
+
+    "hints": {
+      "playerSettingsAudio": "Audio quality: {{quality}} · Background: {{bg}} · Data saver: {{data}}",
+      "playerSettingsVideo": "Video quality: {{quality}} · Captions: {{cap}} · Data saver: {{data}}",
+      "on": "ON",
+      "off": "OFF"
+    }
+  },
+
   "lang": {
     "en": "English",
     "fr": "French",

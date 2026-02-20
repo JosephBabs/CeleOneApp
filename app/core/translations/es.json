@@ -252,6 +252,49 @@
   },
   "common": { "close": "Cerrar", "info": "Info", "error": "Error" },
   "settings": {
+    "search": "Buscar en configuración",
+    "search_results": "Resultados de búsqueda",
+    "no_results": "Sin resultados",
+    "no_results_sub": "Intenta otra palabra clave.",
+    "settings": "Configuración",
+    "more": "Más",
+    "subtitle": "Cuenta, reproducción y suscripciones",
+
+    "packages": "Paquetes",
+    "packages_sub": "Elige un paquete",
+    "packages_hint": "Selecciona un paquete para continuar con el pago.",
+    "no_packages": "No hay paquetes activos",
+    "no_packages_sub": "Crea paquetes en subscription_packages.",
+
+    "duration": "Duración",
+    "days": "días",
+    "price": "Precio",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "pending": "Pendiente",
+    "canceled": "Cancelado",
+
+    "payment": "Pago",
+    "payment_sub": "Elige proveedor y método",
+    "payment_provider": "Proveedor de pago",
+    "payment_method": "Método de pago",
+    "mobile_payment": "Pago móvil",
+    "bank_card": "Tarjeta bancaria",
+    "pay_now": "Pagar ahora",
+    "payment_hint": "La API de pago se añadirá después. Por ahora se crea una suscripción pendiente.",
+    "payment_pending": "Pago iniciado. Esperando confirmación.",
+    "payment_failed": "Pago fallido",
+
+    "mtn_celtis": "MTN Celtis",
+    "momo": "MoMo",
+
+    "no_user": "Debes iniciar sesión.",
+    "loading_packages": "Cargando paquetes...",
+    "no_package_selected": "Ningún paquete seleccionado",
+    "no_package_selected_sub": "Vuelve y elige un paquete.",
+
+    "sub_status_pending": "PENDIENTE",
+
     "loading": "Cargando...",
     "profile_title": "Perfil",
     "profile": "Perfil",
@@ -436,6 +479,164 @@
     "invalidCurrentPassword": "Contraseña actual inválida",
     "weakNewPassword": "La nueva contraseña es muy débil"
   },
+
+
+  "media": {
+    "screenTitle": "Películas y Música",
+    "screenSubtitle": "Buscar · Etiquetas · Playlists · Offline",
+
+    "tabs": {
+      "forYou": "Para ti",
+      "music": "Música",
+      "filmsSeries": "Películas/Series"
+    },
+
+    "search": {
+      "placeholder": "Buscar una película, una canción, un artista…",
+      "allTags": "Todos"
+    },
+
+    "quick": {
+      "favorites": "Favoritos",
+      "offline": "Offline",
+      "playlists": "Playlists",
+      "manageSubscription": "Gestionar suscripción",
+      "subscribe": "Suscribirse"
+    },
+
+    "subscription": {
+      "requiredTitle": "Se requiere suscripción",
+      "cancel": "Cancelar",
+      "viewOffers": "Ver planes",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "free": "Gratis",
+      "activeHint": "Suscripción activa{{pkg}}. Streaming desbloqueado.",
+      "inactiveHint": "Sin suscripción, el streaming está bloqueado. Suscríbete para ver/escuchar.",
+      "pkgFormat": " ({{name}})",
+      "expiringTitle": "Suscripción por vencer",
+      "expiringMsg": "Te quedan aproximadamente {{days}} día(s). Considera renovar.",
+      "expiredTitle": "Suscripción vencida",
+      "expiredMsg": "Tu suscripción ha vencido. Renueva para seguir viendo."
+    },
+
+    "settingsActive": {
+      "title": "Ajustes activos:",
+      "wifiOnly": "Solo Wi-Fi",
+      "dataSaver": "Ahorro de datos",
+      "reducedImages": "Imágenes reducidas"
+    },
+
+    "network": {
+      "title": "Conexión",
+      "noInternet": "Sin conexión a Internet."
+    },
+
+    "badges": {
+      "premium": "Premium",
+      "free": "GRATIS"
+    },
+
+    "counts": {
+      "plays": "{{count}} reproducciones",
+      "views": "{{count}} vistas",
+      "videosCount": "{{count}} vídeos",
+      "tracksCount": "{{count}} pistas",
+      "featured": "Destacado"
+    },
+
+    "labels": {
+      "unknownTitle": "Título desconocido",
+      "unknownArtist": "Artista desconocido",
+      "untitled": "Sin título",
+      "channel": "Canal",
+      "recently": "Reciente",
+      "music": "Música",
+      "seriesEpisodes": "Serie • Episodios",
+      "episodes": "Episodios",
+      "noDescription": "No hay descripción disponible.",
+      "noDescriptionShort": "Sin descripción."
+    },
+
+    "locks": {
+      "subscriptionRequired": "Se requiere suscripción",
+      "locked": "Bloqueado",
+      "streamingLocked": "Streaming bloqueado · Suscríbete para ver."
+    },
+
+    "actionsSheet": {
+      "title": "Acciones",
+      "addToFavorites": "Añadir a favoritos",
+      "removeFromFavorites": "Quitar de favoritos",
+      "addOffline": "Añadir Offline",
+      "removeOffline": "Quitar Offline",
+      "addToPlaylist": "Añadir a una playlist",
+      "createPlaylist": "Crear playlist",
+      "alreadyInPlaylist": "Ya está en esta playlist.",
+      "addedToPlaylist": "Añadido a la playlist.",
+      "errorAddPlaylist": "No se pudo añadir a la playlist.",
+      "errorUpdateFavorites": "No se pudieron actualizar los favoritos.",
+      "errorUpdateOffline": "No se pudo actualizar Offline."
+    },
+
+    "playlist": {
+      "title": "Playlists",
+      "yourPlaylists": "Tus playlists",
+      "newTitle": "Nueva playlist",
+      "namePlaceholder": "Nombre de la playlist",
+      "create": "Crear",
+      "open": "Abrir",
+      "items": "Elementos",
+      "emptyPlaylists": "No hay playlists",
+      "emptyItems": "No hay elementos",
+      "enterName": "Introduce un nombre de playlist.",
+      "createError": "No se pudo crear la playlist."
+    },
+
+    "bottomSheet": {
+      "browse": "Explorar",
+      "favorites": "Tus favoritos",
+      "downloads": "Offline",
+      "library": "Playlists",
+      "shortcuts": "Atajos",
+      "mediaSettings": "Ajustes de medios",
+      "emptyFavorites": "Sin favoritos",
+      "emptyOffline": "Sin elementos Offline"
+    },
+
+    "player": {
+      "audioTitle": "Reproductor de audio",
+      "videoTitle": "Vídeo",
+      "noAudioLink": "Esta pista no tiene enlace de audio.",
+      "noVideoLink": "Sin enlace de vídeo",
+      "cannotPlayAudio": "No se puede reproducir este audio.",
+      "cannotPlayVideo": "No se puede reproducir este vídeo.",
+      "episodeNoLink": "No hay enlace de vídeo para este episodio.",
+      "shareTitle": "Compartir",
+      "shareFallback": "Compartir no está disponible en este dispositivo.",
+      "shareNothing": "Nada que compartir.",
+      "subscribeToListen": "Suscríbete para escuchar música.",
+      "subscribeToWatch": "Suscríbete para ver películas/series.",
+      "subscribeBtn": "Suscribirse",
+      "play": "Reproducir",
+      "like": "Me gusta",
+      "favorite": "Favorito",
+      "offline": "Offline",
+      "playlist": "Playlist",
+      "watch": "Ver",
+      "watchSeries": "Reproducir serie",
+      "watchVideo": "Reproducir"
+    },
+
+    "hints": {
+      "playerSettingsAudio": "Calidad de audio: {{quality}} · Fondo: {{bg}} · Ahorro de datos: {{data}}",
+      "playerSettingsVideo": "Calidad de vídeo: {{quality}} · Subtítulos: {{cap}} · Ahorro de datos: {{data}}",
+      "on": "ON",
+      "off": "OFF"
+    }
+  },
+
+
   "lang": {
     "en": "Inglés",
     "fr": "Francés",
@@ -647,7 +848,7 @@
     "holyThrone": "El Santo Trono",
     "throneMembers": "Miembros del Comité Supremo de Transición"
   },
-   "post": {
+  "post": {
     "post": "Publicación",
     "unknown": "Desconocido",
     "recently": "recientemente",
@@ -865,7 +1066,7 @@
     "failedSendRequest": "No se pudo enviar la solicitud de participación",
     "error": "Error"
   },
-  
+
   "requests": {
     "title": "Solicitudes de amistad",
     "searchUsersByEmail": "Buscar usuarios por email...",

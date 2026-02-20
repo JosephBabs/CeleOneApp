@@ -24,7 +24,7 @@
   "back": "Retour",
   "selectCountry": "Sélectionnez votre pays",
   "guest": "Continuer en tant qu'invité",
-  "loginWithGoogle": "Se connecter avec Google",  
+  "loginWithGoogle": "Se connecter avec Google",
   "forgotPassword": "Mot de passe oublié ?",
   "resetPassword": "Réinitialiser le mot de passe",
   "loading": "Chargement...",
@@ -102,6 +102,49 @@
   },
   "common": { "close": "Fermer", "info": "Info", "error": "Erreur" },
   "settings": {
+    "search": "Rechercher dans les paramètres",
+    "search_results": "Résultats de recherche",
+    "no_results": "Aucun résultat",
+    "no_results_sub": "Essayez un autre mot-clé.",
+    "settings": "Paramètres",
+    "more": "Plus",
+    "subtitle": "Compte, lecture et abonnements",
+
+    "packages": "Forfaits",
+    "packages_sub": "Choisissez un forfait",
+    "packages_hint": "Sélectionnez un forfait pour continuer le paiement.",
+    "no_packages": "Aucun forfait actif",
+    "no_packages_sub": "Créez des forfaits dans subscription_packages.",
+
+    "duration": "Durée",
+    "days": "jours",
+    "price": "Prix",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "pending": "En attente",
+    "canceled": "Annulé",
+
+    "payment": "Paiement",
+    "payment_sub": "Choisissez le fournisseur et la méthode",
+    "payment_provider": "Fournisseur de paiement",
+    "payment_method": "Méthode de paiement",
+    "mobile_payment": "Paiement mobile",
+    "bank_card": "Carte bancaire",
+    "pay_now": "Payer maintenant",
+    "payment_hint": "L’API de paiement sera ajoutée plus tard. Pour l’instant, une souscription en attente est créée.",
+    "payment_pending": "Paiement initialisé. En attente de confirmation.",
+    "payment_failed": "Échec du paiement",
+
+    "mtn_celtis": "MTN Celtis",
+    "momo": "MoMo",
+
+    "no_user": "Vous devez être connecté.",
+    "loading_packages": "Chargement des forfaits...",
+    "no_package_selected": "Aucun forfait sélectionné",
+    "no_package_selected_sub": "Retournez choisir un forfait.",
+
+    "sub_status_pending": "EN ATTENTE",
+
     "loading": "Chargement...",
     "profile_title": "Profil",
     "profile": "Profil",
@@ -214,7 +257,6 @@
     "premium_active": "Premium actif",
     "free_plan": "Forfait gratuit",
 
-
     "more_options": "Plus d’options",
     "more_options_sub": "Partager, support & info",
     "share_app": "Partager l’application",
@@ -266,13 +308,13 @@
     "privacyPolicyText": "Cette politique de confidentialité explique comment nous recueillons, utilisons et protégeons vos informations lorsque vous utilisez notre application. En utilisant l'application, vous acceptez les pratiques décrites dans cette politique.",
     "aboutAppText": "L'application Cèlè One est conçue pour connecter les membres de l'Église du Christianisme Céleste à travers le monde. Elle offre des fonctionnalités telles que les actualités, les documents de l'église, les forums de discussion et plus encore pour renforcer la foi et l'unité parmi les Célestes.",
     "monCompte": "Mon Compte",
-    "changePassword": "Changer le mot de passe", 
+    "changePassword": "Changer le mot de passe",
     "deleteAccount": "Supprimer le compte",
     "accountDeleted": "Compte supprimé avec succès",
     "deleteAccountConfirm": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
     "changePasswordSuccess": "Mot de passe changé avec succès",
     "currentPassword": "Mot de passe actuel",
-    "newPassword": "Nouveau mot de passe",  
+    "newPassword": "Nouveau mot de passe",
     "confirmNewPassword": "Confirmer le nouveau mot de passe",
     "passwordMismatch": "Le nouveau mot de passe et la confirmation ne correspondent pas",
     "updatePassword": "Mettre à jour le mot de passe",
@@ -292,12 +334,164 @@
     "pictureUpdated": "Photo de profil mise à jour avec succès",
     "invalidCurrentPassword": "Mot de passe actuel invalide",
     "weakNewPassword": "Le nouveau mot de passe est trop faible"
-
-
-
-
-
   },
+
+"media": {
+    "screenTitle": "Films & Musiques",
+    "screenSubtitle": "Recherchez · Tags · Playlists · Offline",
+
+    "tabs": {
+      "forYou": "Pour toi",
+      "music": "Musique",
+      "filmsSeries": "Films/Séries"
+    },
+
+    "search": {
+      "placeholder": "Rechercher un film, une musique, un artiste…",
+      "allTags": "Tous"
+    },
+
+    "quick": {
+      "favorites": "Favoris",
+      "offline": "Offline",
+      "playlists": "Playlists",
+      "manageSubscription": "Gérer abonnement",
+      "subscribe": "S'abonner"
+    },
+
+    "subscription": {
+      "requiredTitle": "Abonnement requis",
+      "cancel": "Annuler",
+      "viewOffers": "Voir les offres",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "free": "Free",
+      "activeHint": "Abonnement actif{{pkg}}. Streaming débloqué.",
+      "inactiveHint": "Sans abonnement, le streaming est bloqué. Abonnez-vous pour regarder/écouter.",
+      "pkgFormat": " ({{name}})",
+      "expiringTitle": "Abonnement bientôt expiré",
+      "expiringMsg": "Il vous reste environ {{days}} jour(s). Pensez à renouveler.",
+      "expiredTitle": "Abonnement expiré",
+      "expiredMsg": "Votre abonnement est expiré. Renouvelez pour continuer à regarder."
+    },
+
+    "settingsActive": {
+      "title": "Réglages actifs:",
+      "wifiOnly": "Wi-Fi uniquement",
+      "dataSaver": "Économie de données",
+      "reducedImages": "Images réduites"
+    },
+
+    "network": {
+      "title": "Connexion",
+      "noInternet": "Aucune connexion Internet."
+    },
+
+    "badges": {
+      "premium": "Premium",
+      "free": "FREE"
+    },
+
+    "counts": {
+      "plays": "{{count}} lectures",
+      "views": "{{count}} vues",
+      "videosCount": "{{count}} vidéos",
+      "tracksCount": "{{count}} titres",
+      "featured": "À la une"
+    },
+
+    "labels": {
+      "unknownTitle": "Titre inconnu",
+      "unknownArtist": "Artiste inconnu",
+      "untitled": "Sans titre",
+      "channel": "Chaîne",
+      "recently": "Récemment",
+      "music": "Musique",
+      "seriesEpisodes": "Série • Episodes",
+      "episodes": "Episodes",
+      "noDescription": "Aucune description disponible.",
+      "noDescriptionShort": "Aucune description."
+    },
+
+    "locks": {
+      "subscriptionRequired": "Abonnement requis",
+      "locked": "Bloqué",
+      "streamingLocked": "Streaming bloqué · Abonnez-vous pour regarder."
+    },
+
+    "actionsSheet": {
+      "title": "Actions",
+      "addToFavorites": "Ajouter aux favoris",
+      "removeFromFavorites": "Retirer des favoris",
+      "addOffline": "Ajouter Offline",
+      "removeOffline": "Retirer Offline",
+      "addToPlaylist": "Ajouter à une playlist",
+      "createPlaylist": "Créer une playlist",
+      "alreadyInPlaylist": "Déjà dans cette playlist.",
+      "addedToPlaylist": "Ajouté à la playlist.",
+      "errorAddPlaylist": "Impossible d'ajouter à la playlist.",
+      "errorUpdateFavorites": "Impossible de mettre à jour les favoris.",
+      "errorUpdateOffline": "Impossible de mettre à jour Offline."
+    },
+
+    "playlist": {
+      "title": "Playlists",
+      "yourPlaylists": "Vos playlists",
+      "newTitle": "Nouvelle playlist",
+      "namePlaceholder": "Nom de la playlist",
+      "create": "Créer",
+      "open": "Ouvrir",
+      "items": "Éléments",
+      "emptyPlaylists": "Aucune playlist",
+      "emptyItems": "Aucun élément",
+      "enterName": "Entrez un nom de playlist.",
+      "createError": "Impossible de créer la playlist."
+    },
+
+    "bottomSheet": {
+      "browse": "Explorer",
+      "favorites": "Vos favoris",
+      "downloads": "Offline",
+      "library": "Playlists",
+      "shortcuts": "Raccourcis",
+      "mediaSettings": "Réglages média",
+      "emptyFavorites": "Aucun favori",
+      "emptyOffline": "Aucun élément Offline"
+    },
+
+    "player": {
+      "audioTitle": "Lecture audio",
+      "videoTitle": "Vidéo",
+      "noAudioLink": "Ce son n'a pas de lien audio.",
+      "noVideoLink": "Aucun lien vidéo",
+      "cannotPlayAudio": "Impossible de lire ce son.",
+      "cannotPlayVideo": "Impossible de lire cette vidéo.",
+      "episodeNoLink": "Aucun lien vidéo pour cet épisode.",
+      "shareTitle": "Partager",
+      "shareFallback": "Le partage n'est pas disponible sur cet appareil.",
+      "shareNothing": "Rien à partager.",
+      "subscribeToListen": "Abonnez-vous pour écouter la musique.",
+      "subscribeToWatch": "Abonnez-vous pour regarder les films/séries.",
+      "subscribeBtn": "S'abonner",
+      "play": "Play",
+      "like": "Like",
+      "favorite": "Favori",
+      "offline": "Offline",
+      "playlist": "Playlist",
+      "watch": "Regarder",
+      "watchSeries": "Lire la série",
+      "watchVideo": "Lire"
+    },
+
+    "hints": {
+      "playerSettingsAudio": "Qualité audio: {{quality}} · Background: {{bg}} · Data saver: {{data}}",
+      "playerSettingsVideo": "Qualité vidéo: {{quality}} · Captions: {{cap}} · Data saver: {{data}}",
+      "on": "ON",
+      "off": "OFF"
+    }
+  },
+
+
   "lang": {
     "en": "Anglais",
     "fr": "Français",
@@ -311,7 +505,7 @@
     "apply": "Demander",
     "ok": "OK"
   },
-  
+
   "cantiques": {
     "title": "Cantiques",
     "items": "livres",
@@ -435,7 +629,7 @@
     "failedRejectFriendRequest": "Échec du rejet de la demande d'ami",
     "createPlatformRequest": "Créer une demande de plateforme",
     "platformName": "Nom de la plateforme",
-    "description": "Description", 
+    "description": "Description",
     "submitRequest": "Soumettre la demande",
     "searchUsersPlaceholder": "Rechercher des utilisateurs par email ou nom...",
     "platformNamePlaceholder": "Nom de la plateforme",
@@ -500,7 +694,7 @@
     "listeners": "Auditeurs",
     "nowPlaying": "En lecture"
   },
-  
+
   "leComite": {
     "title": "Sacré Collège",
     "sacredCollege": "Le Sacré Collège",
@@ -955,5 +1149,4 @@
     "failedSendRequest": "Impossible d'envoyer la demande de participation",
     "error": "Erreur"
   }
-  
 }
